@@ -4,31 +4,25 @@ body {
 
 #eegDisplay {
     position: relative;
-    width: 90%; /* Increased the width */
+    width: 90%; 
     height: 100px;
     border: 1px solid black;
     overflow: hidden;
     margin: 20px auto;
 }
 
-#eegBar, #refreshBar, #roiBox {
+#refreshBar {
     position: absolute;
     top: 0;
     bottom: 0;
-}
-
-#eegBar {
-    width: 1px;
-    background-color: red;
-}
-
-#refreshBar {
     width: 2%;
-    background-color: rgba(0, 255, 0, 0.5); /* semi-transparent green */
-    animation-timing-function: linear;
+    background-color: rgba(0, 255, 0, 0.5); 
 }
 
 #roiBox {
+    position: absolute;
+    top: 0;
+    bottom: 0;
     width: 10%;
     border: 2px dashed blue;
     box-sizing: border-box;
