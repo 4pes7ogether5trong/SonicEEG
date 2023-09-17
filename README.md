@@ -1,6 +1,5 @@
 # SonicEEG
 Sonification of EEG waveforms for cross-compatible multi-facility use
-Certainly! Here's a draft for the `README.md` file based on our conversation:
 
 ---
 
