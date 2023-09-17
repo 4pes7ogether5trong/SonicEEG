@@ -5,7 +5,7 @@ Sonification of EEG waveforms for cross-compatible multi-facility use
 
 # SonicEEG
 
-SonicEEG is a web-based application designed to visually and audibly represent EEG patterns. The project provides a simplistic representation where an EEG waveform is shown on a screen, and a refresh bar scans across it. The ROI behind the refresh bar detects the waveform's amplitude, modulating the sound pitch to match the waveform's frequency.
+SonicEEG is a web-based application designed as a proof-of-concept to audibly represent EEG patterns. The project provides a simplistic representation where a mock EEG waveform is shown on a screen, and a refresh bar scans across it. The ROI behind the refresh bar detects the waveform's amplitude, modulating the sound pitch to match the waveform's frequency.
 
 ## Features
 
