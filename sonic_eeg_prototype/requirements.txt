@@ -1,0 +1,5 @@
+numpy>=1.23
+Pillow>=9.0
+mss>=9.0 ; platform_system != "Darwin"
+pyautogui>=0.9
+opencv-python-headless>=4.8
