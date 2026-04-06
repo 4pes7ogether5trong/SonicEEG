@@ -47,3 +47,7 @@ If the GitHub Pages site isn't working:
 This project was developed with the guidance and input from (https://github.com/4pes7ogether5trong). All contributions, suggestions, or issues are welcome.
 
 ---
+
+## Additional Design Docs
+
+- Roblox Easter game concept and implementation plan: `docs/roblox_easter_game_design.md`
