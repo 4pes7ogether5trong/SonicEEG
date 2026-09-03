@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/4pes7ogether5trong/SonicEEG/eeg_visualizer_mvp/frame.schema.json",
+  "title": "SonicEEG visualization frame v1",
+  "type": "object",
+  "required": [
+    "schema", "frame_id", "source_kind", "source_label", "timestamp_s", "generated_at",
+    "sample_rate_hz", "window_seconds", "patient_age_years", "age_reference",
+    "channels", "candidates", "encoding", "warnings"
+  ],
+  "properties": {
+    "schema": { "const": "soniceeg.visual-frame/1" },
+    "frame_id": { "type": "integer", "minimum": 1 },
+    "source_kind": { "type": "string" },
+    "source_label": { "type": "string" },
+    "timestamp_s": { "type": "number" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "sample_rate_hz": { "type": "number", "exclusiveMinimum": 0 },
+    "window_seconds": { "type": "number", "exclusiveMinimum": 0 },
+    "patient_age_years": { "type": "number", "minimum": 1, "maximum": 100 },
+    "age_reference": {
+      "type": "object",
+      "required": ["status", "diagnostic", "regional_frequency_targets_hz"],
+      "properties": {
+        "diagnostic": { "const": false },
+        "regional_frequency_targets_hz": { "type": "object" }
+      }
+    },
+    "channels": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name", "region", "hemisphere", "angle_rad", "dominant_frequency_hz", "spectral_centroid_hz",
+          "band_powers", "dominant_band", "phase_rad", "rhythmicity",
+          "signed_voltage", "rms_amplitude", "peak_to_peak", "voltage_unit",
+          "voltage_calibrated", "quality", "quality_flags", "trace_preview"
+        ],
+        "properties": {
+          "name": { "type": "string" },
+          "region": { "type": "string" },
+          "hemisphere": { "enum": ["left", "right", "midline", "unknown"] },
+          "angle_rad": { "type": "number" },
+          "dominant_frequency_hz": { "type": "number", "minimum": 0 },
+          "spectral_centroid_hz": { "type": "number", "minimum": 0 },
+          "band_powers": {
+            "type": "object",
+            "required": ["delta", "theta", "alpha", "beta", "gamma"],
+            "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "dominant_band": { "enum": ["delta", "theta", "alpha", "beta", "gamma"] },
+          "phase_rad": { "type": "number" },
+          "rhythmicity": { "type": "number", "minimum": 0, "maximum": 1 },
+          "signed_voltage": { "type": "number", "minimum": -1, "maximum": 1 },
+          "rms_amplitude": { "type": "number", "minimum": 0 },
+          "peak_to_peak": { "type": "number", "minimum": 0 },
+          "voltage_unit": { "enum": ["uV", "relative"] },
+          "voltage_calibrated": { "type": "boolean" },
+          "quality": { "type": "number", "minimum": 0, "maximum": 1 },
+          "quality_flags": { "type": "array", "items": { "type": "string" } },
+          "trace_preview": { "type": "array", "items": { "type": "number" } }
+        }
+      }
+    },
+    "candidates": {
+      "type": "object",
+      "required": ["signal_integrity", "physiology", "normal_variants", "abnormality"]
+    },
+    "encoding": { "type": "object" },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}
