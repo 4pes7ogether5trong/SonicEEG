@@ -1,971 +1,411 @@
-import {
-  BANDS,
-  demoBlock,
-  AMPLITUDE_THRESHOLDS,
-  prevalence,
-} from './signal.js';
-import { parseDerivation, recognizeMontage } from './montage.js';
-import { TemporalHistory, LocalArchive, summarizeFrames } from './history.js';
-import { FeaturePipeline } from './pipeline.js';
-import { BrowserCapture } from './capture.js';
-import { FluidField } from './field.js';
-import { FieldAudio } from './audio.js';
-import { extractTraces } from './pixels.js';
-const $ = (id) => document.getElementById(id),
-  text = (id, value) => {
-    $(id).textContent = value;
-  };
-const capture = new BrowserCapture(),
-  audio = new FieldAudio(),
-  archive = new LocalArchive();
-let history = new TemporalHistory(),
-  source = 'none',
-  active = false,
-  paused = false,
-  mode = 'live',
-  band = -1,
-  selected = '',
-  lastFrame = null,
-  timer = null,
-  worker = null,
-  busy = false,
-  segment = 0,
-  localId = null,
-  persistQueue = Promise.resolve(),
-  storageReady = false,
-  reading = false,
-  regions = {},
-  roi = 'plot',
-  drag = null,
-  ocrRows = [],
-  ocrLabels = '',
-  lastDetected = null,
-  dimensions = [],
-  watchAt = 0,
-  calibration = null,
-  historyDetail = null,
-  restoreToken = 0,
-  pendingNewSession = false,
-  sessionToken = 0,
-  operation = 0,
-  reviewStarted = null,
-  confirmedNames = '',
-  frozenFrame = null,
-  frozenFrames = null,
-  frozenEnd = 0;
-const field = new FluidField(
-  $('stage'),
-  (name) => {
-    $('channel').value = name;
-    selected = name;
-    render();
-  },
-  (status) => {
-    text('renderer-state', status);
-    if (status.startsWith('Software')) $('fly').disabled = true;
-  },
-);
-const format = (s) => {
-  s = Math.max(0, s || 0);
-  return s >= 3600
-    ? `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(Math.floor(s) % 60).padStart(2, '0')}`
-    : `${Math.floor(s / 60)}:${String(Math.floor(s) % 60).padStart(2, '0')}`;
-};
-const number = (id) => ($(id).value.trim() === '' ? null : Number($(id).value));
-function status(message, error = false) {
-  text('capture-status', message);
-  $('capture-status').classList.toggle('error', error);
-}
-function settings() {
-  return {
-    hp: number('hp'),
-    lp: number('lp'),
-    notch: $('notch').value === 'unknown' ? null : $('notch').value,
-  };
-}
-function context(frame) {
-  const s = frame?.settings || {};
-  text(
-    'filter-state',
-    `HP ${s.hp ?? '?'} Hz · LP ${s.lp ?? '?'} Hz · notch ${s.notch ?? '?'}${frame?.mixed ? ' · mixed settings: expand time' : ''}`,
-  );
-}
-function newHistory(kind, save = true) {
-  sessionToken++;
-  history = new TemporalHistory();
-  source = kind;
-  lastFrame = null;
-  historyDetail = null;
-  localId = null;
-  paused = false;
-  selected = '';
-  text('pause', 'Freeze view');
-  $('pause').setAttribute('aria-pressed', 'false');
-  $('follow').checked = true;
-  context(null);
-  $('channel').replaceChildren(new Option('All observed channels', ''));
-  if (save && $('save-local').checked) return beginSave();
-}
-async function beginSave() {
-  if (!storageReady) {
-    text(
-      'storage-state',
-      'Local storage is unavailable. History remains in memory.',
-    );
-    return;
-  }
-  const token = sessionToken;
-  try {
-    const id = await archive.create(source);
-    if (token !== sessionToken) return;
-    localId = id;
-    await refreshSessions();
-    text('storage-state', 'Saving new quantitative frames on this device.');
-  } catch {
-    localId = null;
-    text(
-      'storage-state',
-      'Could not create a local session. History remains in memory.',
-    );
-  }
-}
-function receive(frame) {
-  if (frame.start < history.end - 1e-5) {
-    status('An overlapping interval was rejected.', true);
-    return;
-  }
-  // Every accepted interval carries its capture context. No screenshot bytes are retained.
-  history.add(frame);
-  lastFrame = frame;
-  if (localId && $('save-local').checked) {
-    const id = localId;
-    persistQueue = persistQueue
-      .then(() => archive.append(frame, id))
-      .catch(() => {
-        if (localId !== id) return;
-        localId = null;
-        $('save-local').checked = false;
-        text(
-          'storage-state',
-          'Local save failed or storage is full. New history is memory-only.',
-        );
-      });
-  }
-  if (!paused) render();
-}
-function visibleFrame() {
-  if (paused && frozenFrame) return frozenFrame;
-  return $('follow').checked
-    ? lastFrame
-    : historyDetail?.find(
-        (f) =>
-          f.start <= Number($('time').value) && f.end > Number($('time').value),
-      ) || history.select(Number($('time').value));
-}
-function render() {
-  const f = visibleFrame();
-  if (!f) return;
-  const shownEnd = paused ? frozenEnd : history.end;
-  $('empty').hidden = true;
-  $('time').max = String(shownEnd);
-  if ($('follow').checked) $('time').value = String(shownEnd);
-  const focus = Number($('time').value),
-    frames =
-      mode === 'live'
-        ? [f]
-        : paused
-          ? frozenFrames
-          : historyDetail
-            ? summarizeFrames(historyDetail)
-            : history.overview(16),
-    threshold =
-      $('statistic').value === 'prevalence'
-        ? Number($('occupancy-threshold').value)
-        : -1;
-  $('occupancy-threshold').disabled = threshold < 0;
-  $('scale').disabled = threshold >= 0;
-  field.update(frames, {
-    mode,
-    band,
-    selected,
-    scale: Number($('scale').value),
-    lens: Number($('time-lens').value),
-    focus,
-    total: shownEnd,
-    cut: Number($('cut').value) >= 4 ? 20 : Number($('cut').value),
-    peaks: $('statistic').value === 'peaks',
-    threshold,
-  });
-  text('clock', format(focus));
-  text('elapsed', format(history.end));
-  text(
-    'resolution',
-    `${format(f.start)}–${format(f.end)} · ${f.leaves > 1 ? 'compressed summary' : 'quantitative frame'}${f.gaps ? ' · capture gap' : ''}`,
-  );
-  text(
-    'view-label',
-    `${source === 'demo' ? 'SYNTHETIC EXAMPLE · ' : ''}${mode === 'side' ? 'Older time extends along the horizontal axis' : mode === 'history' ? 'Near the head = recent · outward = older' : 'Signed surface · two-second spectrum'} · ${f.mixed ? 'mixed recording settings' : 'sensor-space interpolation'}${field.software ? ' · software: one band at a time' : ''}`,
-  );
-  const old = $('channel').value,
-    names = f.channels.map((c) => c.name);
-  if (
-    names.join() !==
-    Array.from($('channel').options)
-      .slice(1)
-      .map((o) => o.value)
-      .join()
-  ) {
-    $('channel').replaceChildren(
-      new Option('All observed channels', ''),
-      ...names.map((n) => new Option(n, n)),
-    );
-    if (names.includes(old)) $('channel').value = old;
-    else selected = '';
-  }
-  const c =
-    f.channels.find((c) => c.name === selected) ||
-    f.channels.filter((c) => c.valid).sort((a, b) => b.rms - a.rms)[0];
-  if (c) {
-    text(
-      'channel-metrics',
-      `${selected || 'Largest RMS: ' + c.name} · ${c.valid ? c.rms.toFixed(1) + ' µV RMS' : 'unavailable'}`,
-    );
-    text(
-      'coverage',
-      `${c.status} · ${c.validSeconds?.toFixed(1) || 0} valid seconds in this interval${c.unknownFilters ? ' · filter response unknown' : ''}${
-        c.affected?.some(Boolean)
-          ? ` · affected bands: ${BANDS.filter((_, i) => c.affected[i])
-              .map((b) => b.short)
-              .join(', ')}${field.software ? '' : ' (hatched)'}`
-          : ''
-      }`,
-    );
-  } else {
-    text('channel-metrics', 'No valid measurements in this interval');
-    text(
-      'coverage',
-      f.mixed
-        ? 'Different recording settings meet here. Expand time to inspect.'
-        : 'Capture gap or unavailable channels.',
-    );
-  }
-  $('availability').replaceChildren(
-    ...f.channels.map((c) => {
-      const li = document.createElement('li');
-      li.textContent = `${c.name} · ${c.status === 'expected' ? 'expected, not visible' : c.valid ? c.status : 'unavailable'}${c.from ? ' via ' + c.from.join(', ') : ''}`;
-      li.classList.toggle('missing', !c.valid);
-      return li;
-    }),
-  );
-  if (threshold >= 0) {
-    $('view-label').textContent +=
-      ` · brightness = time at band RMS ≥ ${AMPLITUDE_THRESHOLDS[threshold]} µV`;
-    if (c?.valid)
-      $('coverage').textContent +=
-        ' · ' +
-        BANDS.map((b, i) => {
-          const p = prevalence(c, i, threshold);
-          return `${b.short} ${p == null ? 'unavailable' : (100 * p).toFixed(1) + '%'}`;
-        }).join(' / ');
-  }
-  context(f);
-  if (!paused) audio.update(f, selected, band);
-}
-function stop() {
-  operation++;
-  restoreToken++;
-  active = false;
-  clearInterval(timer);
-  timer = null;
-  worker?.terminate();
-  worker = null;
-  busy = false;
-  reading = false;
-  capture.stop();
-  $('setup-preview').width = 0;
-  $('recognize').disabled = false;
-  $('begin').disabled = false;
-  audio.silence();
-  $('stop').hidden = true;
-  $('setup-again').hidden = true;
-  status('Stopped. The captured history remains available.');
-  text(
-    'source-state',
-    source === 'demo'
-      ? 'Synthetic example · stopped'
-      : source === 'none'
-        ? 'No recording loaded'
-        : 'Capture stopped',
-  );
-}
-async function launchCapture() {
-  stop();
-  const token = operation;
-  try {
-    await capture.start(() => stop());
-    if (token !== operation) return;
-    pendingNewSession = true;
-    reviewStarted = null;
-    regions = {};
-    ocrRows = [];
-    ocrLabels = '';
-    lastDetected = null;
-    $('labels').value = '';
-    for (const id of ['hp', 'lp']) $(id).value = '';
-    $('notch').value = 'unknown';
-    $('confirmed').checked = false;
-    dimensions = capture.dimensions();
-    $('setup').showModal();
-    drawPreview();
-    status('Select the source regions and confirm the capture setup.');
-  } catch (e) {
-    status(e.message || 'Window capture was cancelled or blocked.', true);
-  }
-}
-function drawPreview(overlay = null) {
-  const v = capture.video;
-  if (!v.videoWidth) return;
-  const c = $('setup-preview');
-  c.width = Math.min(1200, v.videoWidth);
-  c.height = Math.round((c.width * v.videoHeight) / v.videoWidth);
-  const ctx = c.getContext('2d');
-  ctx.drawImage(v, 0, 0, c.width, c.height);
-  for (const [name, r] of Object.entries(regions)) {
-    ctx.strokeStyle = {
-      plot: '#69e0c2',
-      labels: '#8ec8ff',
-      settings: '#f3bb75',
-    }[name];
-    ctx.lineWidth = 2;
-    ctx.strokeRect(
-      r.x * c.width,
-      r.y * c.height,
-      r.w * c.width,
-      r.h * c.height,
-    );
-    ctx.fillStyle = ctx.strokeStyle;
-    ctx.font = '16px system-ui';
-    ctx.fillText(name, r.x * c.width + 4, Math.max(18, r.y * c.height - 4));
-  }
-  if (overlay && regions.plot) {
-    const r = regions.plot,
-      sx = (r.w * c.width) / overlay.width,
-      sy = (r.h * c.height) / overlay.height;
-    ctx.fillStyle = '#ff8549';
-    for (const row of overlay.rows)
-      for (let x = 0; x < row.pixelY.length; x += 3)
-        if (row.observed[x])
-          ctx.fillRect(
-            r.x * c.width + x * sx,
-            r.y * c.height + row.pixelY[x] * sy,
-            2,
-            2,
-          );
-  }
-}
-function point(event) {
-  const r = $('setup-preview').getBoundingClientRect();
-  return {
-    x: Math.max(0, Math.min(1, (event.clientX - r.left) / r.width)),
-    y: Math.max(0, Math.min(1, (event.clientY - r.top) / r.height)),
-  };
-}
-$('setup-preview').addEventListener('pointerdown', (e) => {
-  const p = point(e);
-  if (calibration) {
-    calibration.push(p);
-    if (calibration.length === 2) {
-      const pixels =
-        Math.abs(calibration[1].y - calibration[0].y) *
-        capture.video.videoHeight;
-      if (pixels < 4) {
-        text(
-          'setup-status',
-          'Calibration marks are too close together. Try again.',
-        );
-      } else {
-        $('uv').value = (Number($('cal-uv').value) / pixels).toFixed(4);
-        text(
-          'setup-status',
-          `Calibration bar: ${pixels.toFixed(1)} pixels. Voltage scale updated.`,
-        );
-      }
-      calibration = null;
-    }
-    return;
-  }
-  drag = p;
-  $('setup-preview').setPointerCapture(e.pointerId);
-});
-$('setup-preview').addEventListener('pointerup', (e) => {
-  if (!drag) return;
-  const p = point(e);
-  const r = {
-    x: Math.min(p.x, drag.x),
-    y: Math.min(p.y, drag.y),
-    w: Math.abs(p.x - drag.x),
-    h: Math.abs(p.y - drag.y),
-  };
-  drag = null;
-  if (r.w > 0.005 && r.h > 0.005) {
-    regions[roi] = r;
-    $('confirmed').checked = false;
-    drawPreview();
-    text(
-      'setup-status',
-      `${roi} region selected. ${roi === 'plot' ? 'Next select the channel labels.' : roi === 'labels' ? 'Next select the display settings.' : 'Ready for local text recognition.'}`,
-    );
-  }
-});
-$('setup-preview').addEventListener('pointercancel', () => {
-  drag = null;
-});
-document.querySelectorAll('[data-roi]').forEach(
-  (b) =>
-    (b.onclick = () => {
-      roi = b.dataset.roi;
-      document
-        .querySelectorAll('[data-roi]')
-        .forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-    }),
-);
-function getRows() {
-  if (!regions.plot) throw new Error('Select the waveform region first.');
-  const labels = $('labels')
-      .value.split(/\n/)
-      .map((s) => s.trim())
-      .filter(Boolean),
-    parsed = labels.map(parseDerivation);
-  if (!labels.length || parsed.some((p) => !p))
-    throw new Error(
-      'Each row needs a recognized electrode pair or explicit reference, such as F7-T7 or C3-REF.',
-    );
-  if (new Set(parsed.map((p) => p.name)).size !== parsed.length)
-    throw new Error(
-      'Duplicate derivations need separate handling; remove duplicate rows from the selected region.',
-    );
-  const height = Math.round(regions.plot.h * capture.video.videoHeight),
-    offset = Number($('row-offset').value) || 0;
-  const useOCR =
-    ocrLabels === $('labels').value && ocrRows.length === parsed.length;
-  return parsed.map((p, i) => ({
-    name: p.name,
-    y:
-      (useOCR
-        ? (regions.labels.y +
-            ocrRows[i].y * regions.labels.h -
-            regions.plot.y) /
-          regions.plot.h
-        : (i + 0.5) / parsed.length) *
-        height +
-      offset,
+import { mountPatient } from './patient-panel.js';
+import { PatientMixer } from './audio.js';
+import { PATIENTS, NOTES, audioLevels } from './audio-mapping.js';
+import { BANDS } from './signal.js';
+import { TRIALS, scoreTrial } from './exercise.js';
+
+const $ = (id) => document.getElementById(id);
+const mixer = new PatientMixer({ onState: () => refreshCards() });
+const panels = [],
+  cards = [],
+  states = PATIENTS.map(() => ({
+    source: 'none',
+    active: false,
+    hasCapture: false,
   }));
-}
-async function readLabels() {
-  if (!regions.labels || !regions.plot) {
-    text('setup-status', 'Select waveform and label regions first.');
-    return;
+let selected = 0,
+  inExercise = false,
+  trial = 0,
+  trialRunning = false,
+  trialStarted = 0,
+  trialTimer = null,
+  trialToken = 0,
+  demoToken = 0;
+let results = [];
+const message = (value) => {
+  $('monitor-message').textContent = value;
+};
+const colors = ['#77d9c7', '#8bbafa', '#dbacf7', '#edca83'];
+
+for (const [slot, name] of PATIENTS.entries()) {
+  const card = document.createElement('section');
+  card.className = 'patient-card';
+  card.style.setProperty('--patient-color', colors[slot]);
+  card.innerHTML =
+    '<button data-action="view" aria-pressed="false"><b>Patient ' +
+    name +
+    '</b><span>Octave ' +
+    (slot + 3) +
+    ' · C–A</span></button><div class="patient-source">No source</div><div class="patient-state">Not started</div><div class="patient-levels" aria-hidden="true"></div><div class="actions"><button data-action="mute" aria-pressed="false">Mute</button><button data-action="focus" aria-pressed="false">Focus</button><button data-action="identify">Identify</button></div><label>Gain <input type="range" min="0" max="150" value="100" aria-label="Patient ' +
+    name +
+    ' gain"><output>1.0×</output></label>';
+  for (const band of BANDS) {
+    const bar = document.createElement('i');
+    bar.style.background = band.color;
+    card.querySelector('.patient-levels').append(bar);
   }
-  const version = capture.version;
-  $('recognize').disabled = true;
-  $('begin').disabled = true;
-  text('setup-status', 'Reading selected regions with the local OCR model…');
-  try {
-    const result = await capture.recognize(regions.labels, regions.settings);
-    if (version !== capture.version) return;
-    ocrRows = result.rows;
-    ocrLabels = ocrRows.map((r) => r.name).join('\n');
-    $('labels').value = ocrLabels;
-    lastDetected = result.settings;
-    const s = result.settings;
-    if (s) {
-      if (s.seconds) $('seconds').value = s.seconds;
-      for (const k of ['hp', 'lp']) if (s[k] != null) $(k).value = s[k];
-      if (['off', '50', '60'].includes(s.notch)) $('notch').value = s.notch;
+  $('patients').append(card);
+  cards.push(card);
+  const root = document.createElement('div');
+  root.className = 'patient-panel';
+  root.id = 'patient-' + name;
+  root.hidden = true;
+  root.append($('patient-template').content.cloneNode(true));
+  for (const el of root.querySelectorAll('[data-id]'))
+    el.id = 'patient-' + name + '-' + el.dataset.id;
+  for (const label of root.querySelectorAll('label[for]'))
+    label.htmlFor = 'patient-' + name + '-' + label.htmlFor;
+  root.querySelector('[data-patient-heading]').textContent =
+    'Patient ' + name + ' · visual review';
+  root.querySelector('[data-id="setup"] h2').textContent =
+    'Patient ' + name + ' · confirm capture setup';
+  card
+    .querySelector('[data-action="view"]')
+    .setAttribute('aria-controls', root.id);
+  $('panels').append(root);
+  panels.push(
+    mountPatient(root, mixer, slot, (state) => {
+      states[slot] = state;
+      refreshCards();
+    }),
+  );
+  card.querySelector('[data-action="view"]').onclick = () => {
+    selected = slot;
+    panels.forEach((p, i) => p.setVisible(i === slot && !inExercise));
+    refreshCards();
+  };
+  card.querySelector('[data-action="mute"]').onclick = () => {
+    mixer.patient(slot, { muted: !mixer.live.slot(slot).muted });
+    refreshCards();
+  };
+  card.querySelector('[data-action="focus"]').onclick = () => {
+    mixer.configure({ focus: mixer.focus === slot ? -1 : slot });
+    refreshCards();
+  };
+  card.querySelector('[data-action="identify"]').onclick = async () => {
+    try {
+      await mixer.enable();
+      mixer.identify(slot);
+      message(
+        'Reference note: patient ' +
+          name +
+          ' · C' +
+          (slot + 3) +
+          '. This cue is not EEG data.',
+      );
+      refreshCards();
+    } catch {
+      message('Sound could not start. Select Enable sound again.');
     }
-    const match = recognizeMontage(ocrRows.map((r) => r.name)),
-      repaired = ocrRows.filter((r) => r.corrected).length;
-    text(
-      'setup-status',
-      `${ocrRows.length} rows found · ${match.name}. ${match.missing.length} expected derivations not visible. ${repaired ? `${repaired} labels include OCR correction suggestions. ` : ''}Confirm every label and row alignment.${s?.sensitivity ? ' Printed sensitivity detected; pixel calibration is still required.' : ''}`,
-    );
-  } catch (e) {
-    if (version === capture.version) text('setup-status', e.message);
-  } finally {
-    if (version === capture.version) {
-      $('recognize').disabled = false;
-      $('begin').disabled = false;
-    }
-  }
+  };
+  card.querySelector('input').oninput = (event) => {
+    mixer.patient(slot, { gain: Number(event.target.value) / 100 });
+    refreshCards();
+  };
 }
-async function checkRows() {
-  try {
-    const rows = getRows(),
-      c = capture.crop(regions.plot),
-      ctx = c.getContext('2d', { willReadFrequently: true }),
-      result = extractTraces(ctx.getImageData(0, 0, c.width, c.height), rows, {
-        uvPerPixel: Number($('uv').value),
-        negativeUp: $('polarity').value === 'up',
-      });
-    drawPreview({ width: c.width, height: c.height, rows: result });
-    text(
-      'setup-status',
-      `Orange points show the extracted path. ${result.filter((c) => c.valid).length}/${result.length} rows pass the initial extraction check. Adjust region or baseline offset if needed.`,
-    );
-    c.width = 0;
-    c.height = 0;
-  } catch (e) {
-    text('setup-status', e.message);
-  }
-}
-async function begin() {
-  const token = operation,
-    version = capture.version;
-  try {
-    if (!capture.stream) throw new Error('Select a source window again.');
-    if (!$('confirmed').checked)
-      throw new Error(
-        'Confirm the rows, polarity, time and voltage scales before starting.',
-      );
-    const rows = getRows(),
-      seconds = Number($('seconds').value),
-      uvPerPixel = Number($('uv').value),
-      s = settings();
-    if (!(seconds > 0 && seconds <= 120 && uvPerPixel > 0 && uvPerPixel <= 100))
-      throw new Error('Provide valid time and voltage scales.');
-    if (s.hp != null && s.lp != null && s.hp >= s.lp)
-      throw new Error(
-        'The high-pass cutoff must be below the low-pass cutoff.',
-      );
-    const h = Math.round(regions.plot.h * capture.video.videoHeight);
-    if (rows.some((r) => r.y < 0 || r.y >= h))
-      throw new Error(
-        'Some label rows fall outside the waveform crop. Adjust the regions.',
-      );
-    const match = recognizeMontage(rows.map((r) => r.name));
-    if (pendingNewSession) {
-      await newHistory('screen');
-      if (token !== operation || version !== capture.version) return;
-      pendingNewSession = false;
-    } else if (reviewStarted && history.count) {
-      const gap = (performance.now() - reviewStarted) / 1000;
-      receive({
-        start: history.end,
-        end: history.end + gap,
-        source: 'screen',
-        segment: 'review-gap',
-        settings: {},
-        channels: [],
-        gaps: gap,
-        leaves: 1,
-      });
-    }
-    reviewStarted = null;
-    confirmedNames = rows.map((r) => r.name).join('|');
-    active = true;
-    segment++;
-    dimensions = capture.dimensions();
-    historyDetail = null;
-    $('setup').close();
-    $('stop').hidden = false;
-    $('setup-again').hidden = false;
-    text('source-state', 'Local window capture');
-    text('montage-name', `${match.name} · ${rows.length} visible derivations`);
-    worker?.terminate();
-    worker = new Worker(new URL('./signal-worker.js', import.meta.url), {
-      type: 'module',
-    });
-    busy = true;
-    worker.onmessage = ({ data: m }) => {
-      if (token !== operation || !active) return;
-      if (m.type === 'frame') receive(m.frame);
-      if (m.type === 'status') {
-        busy = false;
-        status(m.reason);
-        if (!m.accepted) audio.silence();
-      }
-      if (m.type === 'ready') busy = false;
-      if (m.type === 'error') {
-        busy = false;
-        suspend(m.message);
-      }
+panels[0].setVisible(true);
+
+function refreshCards() {
+  cards.forEach((card, slot) => {
+    const s = mixer.live.slot(slot),
+      state = mixer.live.status(slot),
+      metadata = states[slot];
+    card.classList.toggle('selected', slot === selected);
+    card.dataset.state = state;
+    card
+      .querySelector('[data-action="view"]')
+      .setAttribute('aria-pressed', String(slot === selected));
+    card.querySelector('.patient-source').textContent = metadata.hasCapture
+      ? 'Local EEG window'
+      : metadata.source === 'demo'
+        ? 'SYNTHETIC'
+        : metadata.source === 'none'
+          ? 'No source'
+          : 'Saved history';
+    const labels = {
+      idle: 'Not started',
+      waiting: 'Waiting for measurements',
+      live: 'Live measurements',
+      gap: 'No valid signal',
+      stale: 'No fresh data · sound faded',
+      stopped: 'Stopped · sound off',
+      review: 'Capture needs review',
     };
-    worker.onerror = () =>
-      suspend(
-        'The local processing worker stopped. Review capture setup to restart.',
+    card.querySelector('.patient-state').textContent =
+      (labels[state] || state) +
+      (s.muted
+        ? ' · MUTED'
+        : mixer.focus >= 0 && mixer.focus !== slot
+          ? ' · reduced by focus'
+          : '');
+    card
+      .querySelector('[data-action="mute"]')
+      .setAttribute('aria-pressed', String(s.muted));
+    card.querySelector('[data-action="mute"]').textContent = s.muted
+      ? 'Unmute'
+      : 'Mute';
+    card
+      .querySelector('[data-action="focus"]')
+      .setAttribute('aria-pressed', String(mixer.focus === slot));
+    card.querySelector('[data-action="identify"]').disabled = inExercise;
+    card.querySelector('output').textContent = s.gain.toFixed(1) + '×';
+    const levels = state === 'live' ? audioLevels(s.frame).levels : [];
+    card.querySelectorAll('.patient-levels i').forEach((bar, band) => {
+      const rms = Math.max(
+        0,
+        ...levels.filter((l) => l.band === band).map((l) => l.rms),
       );
-    worker.postMessage({
-      type: 'configure',
-      offset: history.end,
-      config: {
-        rows,
-        seconds,
-        uvPerPixel,
-        mode: $('progression').value,
-        negativeUp: $('polarity').value === 'up',
-        settings: s,
-        segment: String(segment),
-        expected: match.expected,
-      },
+      bar.style.height = Math.min(100, (100 * rms) / 80) + '%';
     });
-    watchAt = performance.now();
-    clearInterval(timer);
-    timer = setInterval(captureTick, 500);
-  } catch (e) {
-    text('setup-status', e.message);
-  }
-}
-function suspend(reason) {
-  if (active) reviewStarted = performance.now();
-  active = false;
-  clearInterval(timer);
-  worker?.terminate();
-  worker = null;
-  busy = false;
-  audio.silence();
-  text('source-state', 'Capture needs review');
-  status(reason, true);
-  $('setup-again').hidden = false;
-}
-function markUncertain() {
-  const start = Math.max(0, history.end - 5);
-  history.invalidateSince(start);
-  if (localId) {
-    const id = localId;
-    persistQueue = persistQueue
-      .then(() => archive.invalidateSince(id, start))
-      .catch(() =>
-        text('storage-state', 'Could not update uncertainty in saved history.'),
-      );
-  }
-  render();
-}
-async function captureTick() {
-  if (!active || busy || !worker) return;
-  const token = operation,
-    version = capture.version;
-  if (capture.dimensions().join() !== dimensions.join()) {
-    suspend(
-      'The captured window changed size. Confirm the regions and calibration again.',
-    );
-    return;
-  }
-  if (reading) return;
-  if (
-    performance.now() - watchAt > 5000 &&
-    (regions.settings || regions.labels)
-  ) {
-    reading = true;
-    watchAt = performance.now();
-    try {
-      const checked = regions.labels
-          ? await capture.recognize(regions.labels, regions.settings)
-          : { rows: null, settings: await capture.settings(regions.settings) },
-        next = checked.settings;
-      if (token !== operation || version !== capture.version || !active) return;
-      const changed =
-        next &&
-        lastDetected &&
-        Object.keys(next).some(
-          (k) => lastDetected[k] != null && next[k] !== lastDetected[k],
-        );
-      const layoutChanged =
-        checked.rows &&
-        checked.rows.map((r) => r.name).join('|') !== confirmedNames;
-      if (changed || layoutChanged) {
-        markUncertain();
-        suspend(
-          'The layout or display settings no longer match the confirmed capture. Recent frames are marked uncertain; review setup.',
-        );
-        $('confirmed').checked = false;
-        lastDetected = next;
-        return;
-      }
-      lastDetected = next;
-    } catch {
-      if (token === operation && version === capture.version) {
-        markUncertain();
-        suspend(
-          'The display could not be rechecked. Review the source display and capture setup.',
-        );
-      }
-      return;
-    } finally {
-      if (token === operation && version === capture.version) reading = false;
-    }
-  }
-  if (!active || !worker) return;
-  try {
-    const c = capture.crop(regions.plot),
-      image = c
-        .getContext('2d', { willReadFrequently: true })
-        .getImageData(0, 0, c.width, c.height);
-    busy = true;
-    worker.postMessage(
-      {
-        type: 'pixels',
-        wall: performance.now() / 1000,
-        width: image.width,
-        height: image.height,
-        buffer: image.data.buffer,
-      },
-      [image.data.buffer],
-    );
-    c.width = 0;
-    c.height = 0;
-  } catch {
-    suspend('The captured window is unavailable. Re-select the source window.');
-  }
-}
-async function demo() {
-  stop();
-  const token = operation;
-  await newHistory('demo');
-  if (token !== operation) return;
-  active = true;
-  $('stop').hidden = false;
-  text('source-state', 'SYNTHETIC · programmed example');
-  text('montage-name', 'Longitudinal bipolar · synthetic');
-  const p = new FeaturePipeline(receive),
-    s = { hp: 0.5, lp: 45, notch: 'off' };
-  let t = 0;
-  paused = true;
-  for (; t < 90; t += 0.5)
-    p.ingest(
-      { start: t, duration: 0.5, rate: 128, channels: demoBlock(t, 0.5) },
-      { settings: s, segment: 'demo', source: 'demo' },
-    );
-  paused = false;
-  render();
-  timer = setInterval(() => {
-    if (!active) return;
-    p.ingest(
-      { start: t, duration: 0.5, rate: 128, channels: demoBlock(t, 0.5) },
-      { settings: s, segment: 'demo', source: 'demo' },
-    );
-    t += 0.5;
-  }, 500);
-  status(
-    'Synthetic 10 Hz background with programmed recurrent temporal activity. No patient data.',
-  );
-}
-async function refreshSessions() {
-  if (!storageReady) return;
-  const list = await archive.sessions();
-  $('sessions').replaceChildren(
-    new Option('Select a session', ''),
-    ...list.map(
-      (s) =>
-        new Option(
-          `${new Date(s.created).toLocaleString()} · ${s.source}`,
-          s.id,
-        ),
-    ),
-  );
-}
-async function restore() {
-  const id = $('sessions').value;
-  if (!id) return;
-  stop();
-  newHistory('saved', false);
-  localId = null;
-  const token = ++restoreToken;
-  text('storage-state', 'Opening local history…');
-  await persistQueue;
-  if (token !== restoreToken) return;
-  await archive.visit(id, (f) => {
-    if (token !== restoreToken) return;
-    history.add(f);
-    lastFrame = f;
   });
-  if (token !== restoreToken) return;
-  localId = id;
-  source = lastFrame?.source || 'saved';
-  text('source-state', 'Saved quantitative history');
-  render();
-  text('storage-state', 'Local history opened. Capture is stopped.');
+  $('audio').textContent =
+    mixer.enabled && mixer.context?.state === 'running'
+      ? 'Mute all sound'
+      : 'Enable sound';
+  $('audio').setAttribute(
+    'aria-pressed',
+    String(mixer.enabled && mixer.context?.state === 'running'),
+  );
+  $('audio-status').textContent = !mixer.enabled
+    ? 'Sound off · capture runs independently'
+    : mixer.context?.state !== 'running'
+      ? 'Audio interrupted · select Enable sound'
+      : 'LIVE audio · visual review does not change sound';
+  const capturing = panels.some((p) => p.hasCapture());
+  $('demo-all').disabled = capturing || inExercise;
+  $('exercise-open').disabled = capturing || inExercise;
 }
-let detailTimer;
-function selectTime() {
-  if (paused) return;
-  $('follow').checked = false;
-  historyDetail = null;
-  render();
-  clearTimeout(detailTimer);
-  const id = localId,
-    focus = Number($('time').value);
-  if (!id) return;
-  detailTimer = setTimeout(async () => {
-    try {
-      const frames = await archive.frames(
-        id,
-        Math.max(0, focus - 10),
-        focus + 10,
-      );
-      if (localId === id && Number($('time').value) === focus) {
-        historyDetail = frames;
-        render();
-      }
-    } catch {
-      text(
-        'storage-state',
-        'Detailed local frames could not be read. Showing the memory summary.',
-      );
-    }
-  }, 180);
-}
-document.querySelectorAll('[data-view]').forEach(
-  (b) =>
-    (b.onclick = () => {
-      mode = b.dataset.view;
-      historyDetail = null;
-      document
-        .querySelectorAll('[data-view]')
-        .forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-      if (mode === 'side') field.side();
-      else field.home();
-      render();
-    }),
-);
-for (const [i, b] of BANDS.entries()) {
-  const el = document.createElement('button'),
-    dot = document.createElement('i');
-  dot.style.background = b.color;
-  el.append(dot, `${b.short} ${b.lo}–${b.hi} Hz`);
-  el.dataset.band = String(i);
-  el.setAttribute('aria-pressed', 'false');
-  $('bands').append(el);
-}
-document.querySelectorAll('[data-band]').forEach(
-  (b) =>
-    (b.onclick = () => {
-      band = Number(b.dataset.band);
-      document
-        .querySelectorAll('[data-band]')
-        .forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-      render();
-    }),
-);
-$('capture').onclick = launchCapture;
-$('demo').onclick = demo;
-$('stop').onclick = stop;
-$('guide').onclick = () => $('help').showModal();
-$('home').onclick = () => field.home();
-$('fly').onchange = () => field.enter($('fly').checked);
-$('fov').oninput = () => {
-  field.lens($('fov').value);
-  text('fov-value', $('fov').value + '°');
-};
-for (const id of ['cut', 'time-lens', 'statistic', 'occupancy-threshold'])
-  $(id).oninput = render;
-$('scale').oninput = () => {
-  text('scale-value', $('scale').value + ' µV');
-  render();
-};
-$('channel').onchange = () => {
-  selected = $('channel').value;
-  render();
-};
-$('time').oninput = selectTime;
-$('follow').onchange = () => {
-  historyDetail = null;
-  render();
-};
+
 $('audio').onclick = async () => {
-  if (audio.enabled) {
-    audio.disable();
-    text('audio', 'Enable sound');
-    $('audio').setAttribute('aria-pressed', 'false');
-  } else {
+  if (mixer.enabled && mixer.context?.state === 'running') mixer.disable();
+  else {
     try {
-      await audio.enable();
-      text('audio', 'Mute sound');
-      $('audio').setAttribute('aria-pressed', 'true');
-      render();
+      await mixer.enable();
     } catch {
-      status('Audio is unavailable in this browser.', true);
+      message(
+        'Audio is unavailable. Check browser sound permissions and try again.',
+      );
     }
   }
+  refreshCards();
 };
-$('pause').onclick = () => {
-  if (!paused) {
-    frozenFrame = visibleFrame();
-    frozenFrames = history.overview(16);
-    frozenEnd = history.end;
+$('master-volume').oninput = () => {
+  mixer.configure({ volume: Number($('master-volume').value) / 200 });
+  $('master-value').textContent = $('master-volume').value + '%';
+};
+$('audio-spatial').onchange = () =>
+  mixer.configure({ spatial: $('audio-spatial').value });
+$('audio-band').onchange = () =>
+  mixer.configure({ band: Number($('audio-band').value) });
+$('visuals').onchange = () =>
+  panels.forEach((p) => p.setVisuals($('visuals').checked));
+$('demo-all').onclick = async () => {
+  if (panels.some((p) => p.hasCapture()) || inExercise) return;
+  const token = ++demoToken;
+  message(
+    'Starting four synthetic sources. Select Enable sound, then use Identify to learn each octave.',
+  );
+  try {
+    await Promise.all(panels.map((p, slot) => p.demo({ seed: slot + 1 })));
+    if (token !== demoToken) return;
+    refreshCards();
+  } catch {
+    if (token === demoToken)
+      message('The synthetic example could not start. Stop all and try again.');
   }
-  paused = !paused;
-  text('pause', paused ? 'Resume view' : 'Freeze view');
-  $('pause').setAttribute('aria-pressed', String(paused));
-  if (paused) audio.silence();
-  else render();
 };
-$('setup-again').onclick = () => {
-  suspend('Reviewing capture setup.');
-  $('confirmed').checked = false;
-  $('setup').showModal();
-  drawPreview();
-};
-$('recognize').onclick = readLabels;
-$('check-rows').onclick = checkRows;
-$('begin').onclick = begin;
-$('cancel-setup').onclick = () => {
-  $('setup').close();
-  stop();
-};
-$('calibrate').onclick = () => {
-  calibration = [];
-  text(
-    'setup-status',
-    'Click the two vertical endpoints of the voltage calibration bar.',
+
+function stopSources() {
+  demoToken++;
+  panels.forEach((p) => p.stop());
+}
+$('stop-all').onclick = () => {
+  stopSources();
+  clearTimeout(trialTimer);
+  trialToken++;
+  trialRunning = false;
+  if (inExercise) {
+    $('trial-start').disabled = false;
+    $('trial-answers').disabled = true;
+    $('trial-state').textContent = 'Trial stopped. Start again when ready.';
+  }
+  message(
+    'All four sources stopped. Their captured histories remain available.',
   );
 };
-$('setup').addEventListener('cancel', () => {
-  if (!active) stop();
-});
-$('setup').addEventListener('close', () => {
-  $('setup-preview').width = 0;
-  if (!active && capture.stream) stop();
-});
-$('save-local').onchange = () => {
-  if ($('save-local').checked) beginSave();
-  else {
-    localId = null;
-    text(
-      'storage-state',
-      'New history is memory-only. Existing saved sessions are retained.',
+function exerciseControls(locked) {
+  for (const id of ['audio-spatial', 'audio-band']) $(id).disabled = locked;
+  cards.forEach((card) => {
+    for (const selector of [
+      '[data-action="mute"]',
+      '[data-action="focus"]',
+      'input',
+    ])
+      card.querySelector(selector).disabled = locked;
+  });
+  panels.forEach((p) => p.lock(locked));
+}
+$('exercise-open').onclick = () => {
+  if (panels.some((p) => p.hasCapture())) return;
+  stopSources();
+  inExercise = true;
+  trial = 0;
+  results = [];
+  $('trial-results').replaceChildren();
+  $('trial-result').textContent = '';
+  $('trial-export').disabled = true;
+  $('trial-start').textContent = 'Start trial 1';
+  $('trial-start').disabled = false;
+  $('exercise').hidden = false;
+  document.body.classList.add('exercise-active');
+  panels.forEach((p) => p.setVisible(false));
+  mixer.configure({ focus: -1, spatial: 'maximum', band: -1 });
+  $('audio-spatial').value = 'maximum';
+  $('audio-band').value = '-1';
+  PATIENTS.forEach((_, i) => {
+    mixer.patient(i, { gain: 1, muted: false });
+    cards[i].querySelector('input').value = '100';
+  });
+  exerciseControls(true);
+  refreshCards();
+};
+$('exercise-close').onclick = () => {
+  clearTimeout(trialTimer);
+  trialToken++;
+  trialRunning = false;
+  stopSources();
+  inExercise = false;
+  $('trial-answers').disabled = true;
+  $('exercise').hidden = true;
+  document.body.classList.remove('exercise-active');
+  exerciseControls(false);
+  panels[selected].setVisible(true);
+  refreshCards();
+};
+$('trial-start').onclick = async () => {
+  if (!inExercise || trialRunning) return;
+  const token = ++trialToken;
+  $('trial-start').disabled = true;
+  try {
+    await mixer.enable();
+    if (!inExercise || token !== trialToken) return;
+    stopSources();
+    const spec = TRIALS[trial];
+    $('trial-result').textContent = '';
+    $('trial-answers')
+      .querySelectorAll('input')
+      .forEach((input) => {
+        input.checked = false;
+        input.disabled = !spec.active.includes(Number(input.value));
+      });
+    trialRunning = true;
+    trialStarted = performance.now();
+    await Promise.all(
+      spec.active.map((slot) =>
+        panels[slot].demo({
+          preload: 0,
+          seed: trial + 101,
+          changes: [
+            { start: 8, end: 14, slots: spec.targets, band: spec.band },
+          ],
+        }),
+      ),
     );
+    if (token !== trialToken || !inExercise) return;
+    $('trial-answers').disabled = false;
+    $('trial-state').textContent =
+      'Trial ' +
+      (trial + 1) +
+      ' of 8 · listening to ' +
+      spec.active.map((i) => PATIENTS[i]).join(', ') +
+      '.';
+    trialTimer = setTimeout(() => {
+      if (token !== trialToken) return;
+      stopSources();
+      $('trial-state').textContent =
+        'Clip complete. Submit the patients you heard change.';
+    }, 16000);
+    refreshCards();
+  } catch {
+    if (token !== trialToken) return;
+    trialRunning = false;
+    $('trial-start').disabled = false;
+    $('trial-state').textContent =
+      'Sound could not start. Check browser sound permissions, then try again.';
   }
 };
-$('restore').onclick = () =>
-  restore().catch(() =>
-    text('storage-state', 'This local session could not be opened.'),
+$('trial-answer').onclick = () => {
+  if (!trialRunning) return;
+  const answer = [...$('trial-answers').querySelectorAll('input:checked')].map(
+    (i) => Number(i.value),
   );
-$('erase').onclick = async () => {
-  const id = $('sessions').value;
-  if (!id) return;
-  if (!confirm('Delete this quantitative session from this browser?')) return;
-  await archive.erase(id);
-  if (localId === id) {
-    localId = null;
-    $('save-local').checked = false;
+  const result = scoreTrial(
+    trial,
+    answer,
+    (performance.now() - trialStarted) / 1000,
+  );
+  results.push(result);
+  trialRunning = false;
+  clearTimeout(trialTimer);
+  stopSources();
+  $('trial-answers').disabled = true;
+  const description =
+    'Trial ' +
+    result.trial +
+    ': ' +
+    (result.correct ? 'Correct' : 'Missed') +
+    ' · ' +
+    result.targets.map((i) => PATIENTS[i]).join(' + ') +
+    ' · ' +
+    BANDS[result.band].name +
+    ' (' +
+    NOTES[result.band] +
+    ')';
+  $('trial-result').textContent = description;
+  const li = document.createElement('li');
+  li.textContent = description;
+  $('trial-results').append(li);
+  $('trial-export').disabled = false;
+  trial++;
+  if (trial === TRIALS.length) {
+    $('trial-state').textContent =
+      results.filter((r) => r.correct).length +
+      '/8 exact patient selections. These synthetic results do not establish clinical performance.';
+    $('trial-start').disabled = true;
+  } else {
+    $('trial-start').textContent = 'Start trial ' + (trial + 1);
+    $('trial-start').disabled = false;
   }
-  await refreshSessions();
-  text('storage-state', 'Selected session deleted.');
 };
-archive
-  .open()
-  .then(() => {
-    storageReady = true;
-    refreshSessions();
-  })
-  .catch(() =>
-    text(
-      'storage-state',
-      'Persistent browser storage is unavailable. Memory history still works.',
+$('trial-export').onclick = () => {
+  const url = URL.createObjectURL(
+    new Blob(
+      [
+        JSON.stringify(
+          { protocol: 'soniceeg-four-voices-v1', synthetic: true, results },
+          null,
+          2,
+        ),
+      ],
+      { type: 'application/json' },
     ),
   );
-window.addEventListener('beforeunload', () => {
-  capture.stop();
-  audio.disable();
-  worker?.terminate();
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'soniceeg-listening-results.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+setInterval(refreshCards, 500);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden)
+    message(
+      'This tab is in the background. Capture may pause; stale measurements will fade from sound.',
+    );
+  else
+    message(
+      'Tab active. Check each patient for fresh measurements before continuing.',
+    );
 });
+window.addEventListener('beforeunload', () => mixer.disable());
+refreshCards();

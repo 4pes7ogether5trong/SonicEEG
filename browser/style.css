@@ -23,7 +23,7 @@ textarea {
 }
 button,
 select,
-input[type='number'],
+input[type="number"],
 textarea {
   border: 1px solid var(--border);
   border-radius: 7px;
@@ -42,7 +42,7 @@ button:disabled {
   opacity: 0.45;
   cursor: wait;
 }
-button[aria-pressed='true'] {
+button[aria-pressed="true"] {
   background: #234850;
   border-color: #66baba;
   color: #c6ffef;
@@ -67,19 +67,19 @@ label {
   display: block;
   font-size: 0.875rem;
 }
-input[type='range'] {
+input[type="range"] {
   accent-color: #82c8c8;
   vertical-align: middle;
   min-width: 80px;
   max-width: 100%;
 }
-input[type='checkbox'] {
+input[type="checkbox"] {
   accent-color: #82c8c8;
   margin-right: 0.45rem;
 }
 select,
 textarea,
-input[type='number'] {
+input[type="number"] {
   width: 100%;
   display: block;
   margin: 0.3rem 0 0.65rem;
@@ -135,7 +135,7 @@ header {
   );
   box-shadow: 0 0 18px #6d99e04a;
 }
-#source-state {
+[data-id="source-state"] {
   font-size: 0.875rem;
   color: #b8d6db;
 }
@@ -166,11 +166,11 @@ main {
   gap: 0.35rem;
   flex-wrap: wrap;
 }
-#renderer-state {
+[data-id="renderer-state"] {
   font-size: 0.75rem;
   color: var(--muted);
 }
-#stage {
+[data-id="stage"] {
   position: relative;
   height: min(65vh, 760px);
   min-height: 390px;
@@ -179,13 +179,13 @@ main {
   border-radius: 12px;
   overflow: hidden;
 }
-#stage canvas {
+[data-id="stage"] canvas {
   display: block;
   width: 100%;
   height: 100%;
   touch-action: none;
 }
-#empty {
+[data-id="empty"] {
   position: absolute;
   z-index: 1;
   left: 50%;
@@ -196,7 +196,7 @@ main {
   text-align: center;
   pointer-events: none;
 }
-#empty p {
+[data-id="empty"] p {
   font-size: 0.9rem;
 }
 .orientation {
@@ -207,7 +207,7 @@ main {
   color: #adbdce;
   pointer-events: none;
 }
-#view-label {
+[data-id="view-label"] {
   position: absolute;
   left: 1rem;
   right: 1rem;
@@ -228,7 +228,7 @@ main {
   align-items: center;
   gap: 0.3rem;
 }
-.navigation input[type='range'] {
+.navigation input[type="range"] {
   width: 85px;
 }
 .time-control {
@@ -248,7 +248,7 @@ main {
 .spread label {
   font-size: 0.9rem;
 }
-#clock {
+[data-id="clock"] {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   margin-left: 0.6rem;
@@ -294,27 +294,27 @@ aside section {
 aside section > label {
   margin: 0.8rem 0;
 }
-aside input[type='range'] {
+aside input[type="range"] {
   display: block;
   width: 100%;
   margin: 0.5rem 0;
 }
-#capture-status {
+[data-id="capture-status"] {
   font-size: 0.85rem;
   margin: 0.6rem 0;
   color: #c1dadf;
   overflow-wrap: anywhere;
 }
-#availability {
+[data-id="availability"] {
   padding: 0;
   list-style: none;
   font-size: 0.8rem;
 }
-#availability li {
+[data-id="availability"] li {
   padding: 0.3rem 0;
   border-bottom: 1px solid #1c2b3a;
 }
-#availability .missing {
+[data-id="availability"] .missing {
   color: #f0c38b;
 }
 details {
@@ -351,7 +351,7 @@ dialog::backdrop {
   float: right;
   font-size: 1.3rem;
 }
-#setup-preview {
+[data-id="setup-preview"] {
   display: block;
   width: 100%;
   height: auto;
@@ -360,7 +360,7 @@ dialog::backdrop {
   touch-action: none;
   border: 1px solid var(--border);
 }
-#setup-status {
+[data-id="setup-status"] {
   padding: 0.65rem;
   background: #19313c;
   font-size: 0.875rem;
@@ -374,13 +374,13 @@ dialog::backdrop {
 .setup-fields {
   min-width: 0;
 }
-#help {
+[data-id="help"] {
   max-width: 700px;
 }
-#help p {
+[data-id="help"] p {
   font-size: 0.95rem;
 }
-#storage-state {
+[data-id="storage-state"] {
   font-size: 0.8rem;
   margin-top: 0.5rem;
 }
@@ -397,7 +397,7 @@ dialog::backdrop {
   header {
     padding: 0.8rem;
   }
-  #stage {
+  [data-id="stage"] {
     min-height: 340px;
   }
   .navigation {
@@ -414,7 +414,7 @@ dialog::backdrop {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 1rem;
   }
-  #stage {
+  [data-id="stage"] {
     height: 54vh;
     min-height: 330px;
   }
@@ -427,7 +427,7 @@ dialog::backdrop {
   header button {
     font-size: 0.875rem;
   }
-  #empty h1 {
+  [data-id="empty"] h1 {
     font-size: 1.3rem;
   }
   dialog {
@@ -440,5 +440,187 @@ dialog::backdrop {
 @media (prefers-reduced-motion: reduce) {
   * {
     scroll-behavior: auto;
+  }
+}
+
+.monitor-header {
+  padding-bottom: 0.8rem;
+}
+.mixer {
+  padding: 0 1.4rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.patient-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+.patient-card {
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--patient-color);
+  border-radius: 9px;
+  padding: 0.7rem;
+  min-width: 0;
+  background: #0a1421;
+}
+.patient-card.selected {
+  background: #152637;
+  border-color: var(--patient-color);
+}
+.patient-card > button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  background: transparent;
+  padding: 0 0 0.3rem;
+  text-align: left;
+}
+.patient-card b {
+  font-size: 1.25rem;
+  color: var(--patient-color);
+}
+.patient-card .patient-source {
+  color: #becedb;
+  min-height: 1.6em;
+  font-size: 0.875rem;
+}
+.patient-card .patient-state {
+  font-size: 0.875rem;
+  min-height: 1.6em;
+  margin: 0.1rem 0 0.4rem;
+}
+.patient-card[data-state="live"] .patient-state {
+  color: #8edbcc;
+}
+.patient-card[data-state="stale"] .patient-state,
+.patient-card[data-state="review"] .patient-state,
+.patient-card[data-state="gap"] .patient-state {
+  color: #ffd299;
+}
+.patient-card .actions {
+  gap: 0.3rem;
+}
+.patient-card .actions button {
+  font-size: 0.875rem;
+  padding: 0.35rem 0.5rem;
+}
+.patient-card label {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+.patient-card input[type="range"] {
+  min-width: 0;
+  width: 100%;
+}
+.patient-card output {
+  min-width: 3ch;
+}
+.patient-levels {
+  display: flex;
+  gap: 4px;
+  height: 14px;
+  align-items: end;
+  margin: 0.5rem 0;
+}
+.patient-levels i {
+  width: 20%;
+  min-height: 2px;
+  border-radius: 2px;
+}
+.mixer-controls {
+  display: flex;
+  gap: 0.8rem 1.2rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 0.8rem;
+}
+.mixer-controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+}
+.mixer-controls input[type="range"] {
+  width: 95px;
+}
+#audio-status,
+#monitor-message {
+  font-size: 0.875rem;
+  color: #b0c5d8;
+}
+#monitor-message {
+  margin: 0.6rem 0 0.2rem;
+}
+.patient-panel > header {
+  padding: 0.7rem 1.4rem;
+  background: #0c1725;
+}
+.patient-panel > header b {
+  color: #e1edf6;
+}
+.patient-panel [data-id="stage"] {
+  height: min(55vh, 650px);
+}
+#exercise {
+  margin: 1rem 1.4rem;
+  padding: 1rem;
+  border: 1px solid #526581;
+  border-radius: 10px;
+  max-width: 960px;
+}
+#exercise h2 {
+  font-size: 1.1rem;
+}
+#exercise p {
+  line-height: 1.6;
+}
+#trial-answers {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.8rem;
+}
+#trial-answers label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+#trial-results {
+  padding-left: 1.4rem;
+  line-height: 1.8;
+}
+body.exercise-active #panels,
+body.exercise-active .patient-levels {
+  display: none;
+}
+body.exercise-active .patient-card [data-action="identify"] {
+  visibility: hidden;
+}
+@media (max-width: 880px) {
+  .patient-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 500px) {
+  .mixer {
+    padding: 0 0.7rem 0.5rem;
+  }
+  .patient-card {
+    padding: 0.5rem;
+  }
+  .patient-card > button {
+    display: block;
+  }
+  .patient-card > button span {
+    display: block;
+    font-size: 0.875rem;
   }
 }

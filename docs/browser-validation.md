@@ -2,7 +2,7 @@
 
 ## Checks completed for this revision
 
-`npm test` exercises 27 tests with Node's test runner, generated image fixtures, local Tesseract OCR and fake IndexedDB. These are code-level checks, not browser interaction tests.
+`npm test` exercises 32 tests with Node's test runner, generated image fixtures, local Tesseract OCR, fake IndexedDB and an AudioContext scheduling double. These are code-level checks, not browser interaction or physical listening tests.
 
 | Property | Evidence |
 | --- | --- |
@@ -19,6 +19,10 @@
 | Context | Incompatible recording segments do not render a combined average as valid EEG |
 | Time lens and missing channels | Lens mapping is monotonic with fixed endpoints; unavailable channels contribute no surface coverage |
 | Local storage | Separate sessions, interval retrieval, sequential restoration, uncertainty marking and selective deletion |
+| Patient identity | Twenty carrier frequencies retain the same band intervals across four nonoverlapping octave ranges |
+| Audio amplitude | Doubling voltage doubles gain below the cap; focal maximum retains a strong isolated contribution; missing/derived rows do not invent or duplicate audio |
+| Audio lifecycle | Duplicate/old intervals cannot refresh stale state; controls preserve the acquisition expiry deadline; gaps and stopping one patient leave others active |
+| Synthetic four-stream exercise | Only the programmed patients show the selected band increase, including two simultaneous targets; exact/partial/early responses are scored distinctly |
 
 `npm run check` checks module syntax, literal DOM references, duplicate element IDs, expected CSP, and unexpected application-owned network APIs/endpoints. It is a static audit, not an observed network-traffic test.
 
@@ -51,7 +55,13 @@ Record chosen channel/derivation, selected onset interval, amplitude criterion, 
 
 ### Device and privacy checks
 
-Verify actual rotation, cutaway, all-band and isolated-band rendering, keyboard/fly controls, freeze/follow, saved-history retrieval and the software fallback. Check that camera changes preserve numeric values and that overlap does not mislead readers about prevalence. Listen on physical stereo devices and confirm silence on pause, gaps, permission revocation and source replacement.
+Verify actual rotation, cutaway, all-band and isolated-band rendering, keyboard/fly controls, freeze/follow, saved-history retrieval and the software fallback. Check that camera changes preserve numeric values and that overlap does not mislead readers about prevalence. Listen on physical stereo devices: view freeze, time selection, visual band/channel selection and 3D-off must leave live sound running. Gaps, stale data, permission revocation and source replacement must silence only the affected patient. Master mute must leave acquisition running. Opening a saved session stops its own slot, not the other patients.
+
+### Four-patient listening exercise
+
+The implemented audio-only exercise contains eight fixed trials: two with one patient, two with two patients and four with four patients, including two simultaneous-target trials. Each clip has a nominal change at 8 seconds through 14 seconds and ends at 16 seconds. Actual audible changes reflect the two-second spectral window, half-second updates, scheduling and the output device. Exported response times are measured from the nominal source onset; they are not calibrated auditory reaction times. Fixed order and replay make this suitable for learning and initial feasibility only, not an unbiased comparative study. Capture controls are locked during the exercise and no attached real capture may be replaced by starting it. Responses contain slot letters/indices, synthetic seeds, targets and timing, with no patient identifiers.
+
+For Tuesday's hands-on check: start four synthetic patients, learn the Identify tones, complete the eight trials, then try selecting and freezing another patient's history while listening. Next use a known deidentified source in one vendor window and verify calibration, montage and capture continuity; expand to two then four windows only after that source is reconstructed faithfully. Test stereo and mono output, comfortable levels, high-octave fatigue, simultaneous changes, focus attenuation and recognition with 3D hidden. Record missed or confused slots as design feedback; pleasant harmony alone is not evidence that independent patients can be tracked.
 
 Use the browser network inspector on the deployed host: startup should request static application/OCR assets; capture should cause no image, label, feature or patient-bearing upload. Repeat through OCR startup, errors, saved-session use and source changes. Inspect worker response policies as well as the page meta policy. Test quota failure and session deletion on actual IndexedDB implementations.
 

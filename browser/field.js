@@ -123,7 +123,7 @@ export class FluidField {
       this.renderer.setAnimationLoop((now) => {
         const dt = Math.min(0.05, (now - last) / 1000);
         last = now;
-        if (document.hidden) return;
+        if (document.hidden || this.visible === false) return;
         this.settle(dt);
         this.fly.enabled ? this.fly.update(dt) : this.controls.update();
         this.renderer.render(this.scene, this.camera);

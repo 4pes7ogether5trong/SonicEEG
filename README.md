@@ -13,7 +13,9 @@ This is an implemented research prototype. Compatibility with Natus, Cadwell, Ni
 - **Hidden-channel provenance:** observed, algebraically derived, expected unseen and unavailable measurements remain distinct. A missing voltage difference is derived only from a connected, aligned path of observed differences.
 - **Capture calibration:** separate waveform/label/settings regions, two-click voltage-bar calibration, seconds per region, polarity, filters, row alignment preview, duplicate rejection and explicit capture gaps.
 - **Local processing:** image extraction and FFT in a Web Worker; bundled local OCR worker, WASM and English model; no application upload, analytics or cloud-AI integration.
-- **Sound:** opt-in spectral tones with amplitude tied to band RMS, hemisphere stereo placement, band/channel isolation, and silence when measurements stop.
+- **Four patient voices:** independent capture, montage, calibration and history for slots A–D. Fixed C3–A3, C4–A4, C5–A5 and C6–A6 ranges share a C–D–E–G–A band palette, with restrained timbre differences, hemisphere stereo placement and a shared voltage scale.
+- **Independent live audio:** each patient's gain, mute and focus controls operate separately. Visual patient/band selection, time review, freeze and disabling 3D never redirect live sound. Only fresh measurements refresh a voice; stale sound fades after 2.5 seconds. Focus lowers other patients by 12 dB without fully silencing them.
+- **Listening exercise:** eight repeatable synthetic trials with one, two and four active patients, including simultaneous changes. Select the patients that changed, reveal the programmed targets and optionally export responses locally. This is not a validated clinical or psychometric test.
 - **Local history:** opt-in IndexedDB persistence and per-session deletion. Opening a saved session restores quantitative frames; the original EEG recording and screenshots are not archived.
 - **Explicit synthetic example:** a repeatable background and recurrent temporal activity for exploration. Capture errors never switch to synthetic data.
 
@@ -41,12 +43,14 @@ The root `index.html` remains the **legacy** static demo entry. To serve the new
 
 ## First capture
 
-1. Open the hosted page and choose **Capture EEG window**. Use the browser's native chooser to select the EEG application window.
+1. Open the hosted page, select patient **A**, then choose **Capture EEG window**. Use the browser's native chooser to select that patient's EEG application window. Repeat setup independently for B, C and D as needed; each selection requires a browser permission gesture.
 2. Draw the waveform, channel-label and display-setting regions. Exclude headers and patient video from these processing regions. The initial full-window preview exists locally for this selection.
 3. Read the labels with local OCR, or enter the visible derivations in row order. Confirm any suggested glyph corrections. A printed montage name alone is insufficient.
 4. Confirm time scale, polarity, filters and voltage per captured pixel. Use a visible voltage bar; printed µV/mm alone cannot calibrate a resized screenshot.
 5. Use **Show extraction alignment** and verify the orange extracted points against the source. Adjust the crop/row offset, then confirm and begin.
-6. Explore Live surface, Whole history and Side profile. Select a channel/band, change the history statistic, or scrub time. Enable local saving before capture if detailed older quantitative frames must remain available.
+6. Enable sound at a comfortable volume. Identify plays the selected patient's brief octave reference tone. Explore Live surface, Whole history and Side profile, select a visual channel/band, change the history statistic, or scrub time while all live patients continue sounding. Enable local saving before capture if detailed older quantitative frames must remain available. Opening a saved session stops only its own slot; live patients in other slots continue.
+
+For an immediate demonstration, choose **Try four synthetic patients**, then **Enable sound**. Switch patient cards and try **Freeze view** or turn off **3D view** while listening. The listening exercise becomes available when no real capture is attached; it never replaces an active real capture. **Stop all** stops the four sources; **Mute all sound** leaves acquisition running.
 
 Labels and readable settings are rechecked about every five seconds. A discrepancy or lost alignment requests setup review and marks recent measurements uncertain. Settings that are not readable cannot be monitored automatically. An uncertain channel does not become a zero-amplitude channel.
 

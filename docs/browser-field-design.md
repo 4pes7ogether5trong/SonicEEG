@@ -107,7 +107,17 @@ Local saved-frame storage grows with recording duration and channel count. Quota
 
 ## Sound
 
-Five pitches (98, 147, 220, 330, 494 Hz) encode the five spectral bands. These are display tones, not accelerated raw EEG. Tone amplitude follows square root band power, with a capped master gain and a limiter. Left/right placement follows electrode coordinates rather than camera rotation. Channel and band selection use the same frame as the visual metrics; frozen views mute. Each update expires after 1.2 seconds to prevent stale measurements sustaining a tone after a stalled capture.
+Patient slots A–D use octaves 3–6 respectively. Delta, theta, alpha, beta and 30–45 Hz use C, D, E, G and A within each patient's octave: `f(slot, band) = 130.8127826502993 × 2^(slot + semitones[band]/12)`, with semitones `[0, 2, 4, 7, 9]`. These are spectral display tones, not accelerated raw EEG; within-band frequency evolution is not encoded as pitch in this MVP. Small second/third partials vary by patient as a secondary identity cue. Octave/pentatonic harmony does not establish perceptual separability; listening evaluation is required.
+
+Each band has left and right voices. Side follows the first electrode of the displayed derivation, with midline contributions on both sides. The default takes the maximum observed band power on each side so a focal contribution is not averaged away; the optional mean averages observed power before taking its square root. Derived and expected channels are excluded from sound to avoid double-counting. This is montage-dependent sensor-space illustration, not source localization. Filter-affected bands remain displayed and audible as measured; settings are disclosed, not inverted.
+
+Per-voice gain is `0.018 × min(2, band RMS / 40 µV)` before patient gain (0–1.5), focus attenuation (0.25 for other patients) and master gain (0–0.5). There is no per-patient peak normalization. A dynamics compressor reduces high output peaks; it does not establish a calibrated acoustic SPL. Individual gain adjustments intentionally change relative audible amplitude and remain visible.
+
+One mixer owns the AudioContext and 40 persistent oscillator voices. Four patient controllers own independent capture/OCR workers, history, calibration, operation guards and save-session IDs. Only newly accepted acquisition frames call the mixer. Duplicate/older intervals, screen gaps and source replacement cannot extend audio freshness. A 2.5-second expiry is scheduled on the audio clock, followed by a short release and zero at 2.8 seconds, so a stalled UI cannot sustain an old tone indefinitely. The state distinguishes live, waiting, invalid signal, stale, stopped, review-needed and muted.
+
+Selecting a different visual patient, viewing history, selecting visual channels/bands or freezing the image never changes live sound. Audible-band filtering is a separate mixer control. Focus lowers other patients by 12 dB; mute is explicit. Disabling 3D stops rendering while acquisition/audio continue. Historical sonification is deferred, so an old record cannot accidentally be heard as live EEG. Identify is an explicit brief reference note, not a measurement or alarm.
+
+Separate getDisplayMedia selections support at most four windows. This is a product scope limit, not a statement of universal staffing law. Keep the browser active for this first version: capture/timer throttling, device locking and AudioContext suspension can interrupt monitoring. Stale audio fades; persistent background monitoring and four simultaneous vendor captures still need device-level evaluation.
 
 ## Privacy and hosting boundary
 
