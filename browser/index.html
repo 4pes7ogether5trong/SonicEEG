@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <meta
+      name="description"
+      content="A local browser EEG screen interpreter with a fluid 3D measurement field, montage awareness, and navigable temporal history."
+    />
+    <title>SonicEEG · Living field</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="identity">
+        <span class="orbmark" aria-hidden="true"></span>
+        <div><b>SonicEEG</b><span>Living field</span></div>
+      </div>
+      <span id="source-state">No recording loaded</span>
+      <div class="actions">
+        <button id="capture" class="primary">Capture EEG window</button
+        ><button id="demo">Explore synthetic example</button
+        ><button id="stop" hidden>Stop capture</button
+        ><button id="guide">Guide</button>
+      </div>
+    </header>
+    <main>
+      <section class="field-workspace" aria-label="EEG visualization">
+        <div class="viewbar">
+          <div class="segmented" aria-label="View">
+            <button data-view="live" aria-pressed="true">Live surface</button
+            ><button data-view="history" aria-pressed="false">
+              Whole history</button
+            ><button data-view="side" aria-pressed="false">Side profile</button>
+          </div>
+          <span id="renderer-state"></span>
+        </div>
+        <div id="stage">
+          <div id="empty">
+            <h1>See the EEG take shape.</h1>
+            <p>
+              Capture the EEG application window, confirm its montage and
+              scales, then explore the field through time.
+            </p>
+            <p class="muted">
+              Screen pixels and measurements are processed on this device.
+            </p>
+          </div>
+          <div class="orientation">L / R follow the electrode labels</div>
+          <div id="view-label">
+            Measurement surface · no cortical source estimation
+          </div>
+        </div>
+        <div class="navigation">
+          <button id="home">Home view</button
+          ><label
+            ><input id="fly" type="checkbox" />Enter field
+            <span class="muted">WASD + drag</span></label
+          ><label
+            >Lens
+            <input id="fov" type="range" min="20" max="100" value="48" /><output
+              id="fov-value"
+              >48°</output
+            ></label
+          ><label
+            >Section
+            <input id="cut" type="range" min="-3" max="4" value="4" step=".05"
+          /></label>
+        </div>
+        <div class="time-control">
+          <div class="spread">
+            <label for="time"
+              >Capture time <output id="clock">0:00</output></label
+            ><label
+              ><input id="follow" type="checkbox" checked />Follow live</label
+            >
+          </div>
+          <input id="time" type="range" min="0" max="1" value="0" step=".1" />
+          <div class="spread muted">
+            <span>Start</span><span id="resolution">No history yet</span
+            ><span id="elapsed">0:00</span>
+          </div>
+        </div>
+        <div class="band-controls" id="bands" aria-label="Frequency layers">
+          <button data-band="-1" aria-pressed="true">All layers</button>
+        </div>
+      </section>
+      <aside>
+        <section>
+          <h2>Read the field</h2>
+          <label
+            >Channel or derivation<select id="channel">
+              <option value="">All observed channels</option>
+            </select></label
+          >
+          <div id="channel-metrics" class="readout">No measurements</div>
+          <div id="coverage" class="muted"></div>
+          <label
+            >Amplitude ruler <output id="scale-value">80 µV</output
+            ><input
+              id="scale"
+              type="range"
+              min="20"
+              max="200"
+              value="80"
+              step="5"
+          /></label>
+          <label
+            >Time expansion<input
+              id="time-lens"
+              type="range"
+              min="0"
+              max="1"
+              value=".5"
+              step=".02"
+          /></label>
+          <label
+            >History statistic<select id="statistic">
+              <option value="typical">Mean band power</option>
+              <option value="peaks">Brief peaks retained</option>
+              <option value="prevalence">Time above amplitude threshold</option>
+            </select></label
+          >
+          <label
+            >Band RMS threshold<select id="occupancy-threshold" disabled>
+              <option value="0">5 µV</option>
+              <option value="1">10 µV</option>
+              <option value="2" selected>20 µV</option>
+              <option value="3">40 µV</option>
+              <option value="4">80 µV</option>
+              <option value="5">160 µV</option>
+              <option value="6">320 µV</option>
+            </select></label
+          >
+          <div class="actions">
+            <button id="audio" aria-pressed="false">Enable sound</button
+            ><button id="pause" aria-pressed="false">Freeze view</button>
+          </div>
+        </section>
+        <section>
+          <h2>Recording context</h2>
+          <div id="montage-name">Montage not confirmed</div>
+          <div id="filter-state" class="muted">Filters unknown</div>
+          <div id="capture-status" role="status">
+            Capture a window or select the synthetic example.
+          </div>
+          <button id="setup-again" hidden>Review capture setup</button>
+          <details>
+            <summary>Channel availability</summary>
+            <ul id="availability"></ul>
+          </details>
+        </section>
+        <section>
+          <h2>On this device</h2>
+          <label
+            ><input id="save-local" type="checkbox" />Keep quantitative history
+            locally</label
+          >
+          <p class="muted">
+            Saves measurements and settings in this browser, without screenshots
+            or patient headers. Subject to device storage limits.
+          </p>
+          <label
+            >Saved session<select id="sessions">
+              <option value="">Select a session</option>
+            </select></label
+          >
+          <div class="actions">
+            <button id="restore">Open</button
+            ><button id="erase">Delete selected</button>
+          </div>
+          <div id="storage-state" role="status"></div>
+        </section>
+      </aside>
+    </main>
+    <footer>
+      <span
+        >Research prototype · interpretation remains in the source EEG
+        application</span
+      ><span
+        >Surface polarity: displayed derivations · brightness: amplitude ·
+        color: frequency</span
+      >
+    </footer>
+    <dialog id="setup">
+      <form method="dialog">
+        <button class="close" aria-label="Close capture setup">×</button>
+      </form>
+      <h2>Confirm what SonicEEG can see</h2>
+      <p>
+        Draw three regions. Keep the patient header and video outside the
+        regions. The preview stays on this device.
+      </p>
+      <div class="actions">
+        <button data-roi="plot" aria-pressed="true">1 · Waveform area</button
+        ><button data-roi="labels" aria-pressed="false">
+          2 · Channel labels</button
+        ><button data-roi="settings" aria-pressed="false">
+          3 · Display settings</button
+        ><button id="recognize">Read labels and settings</button>
+      </div>
+      <canvas
+        id="setup-preview"
+        aria-label="Captured window preview. Drag to select the waveform, channel-label, and settings regions."
+      ></canvas>
+      <div id="setup-status" role="status">
+        Select the waveform area, including all desired traces but excluding
+        channel labels.
+      </div>
+      <div class="setup-grid">
+        <label
+          >Derivations, one per row<textarea
+            id="labels"
+            rows="8"
+            spellcheck="false"
+            placeholder="FP1-F7&#10;F7-T7&#10;T7-P7&#10;P7-O1"
+          ></textarea>
+        </label>
+        <div class="setup-fields">
+          <label
+            >Seconds across waveform region<input
+              id="seconds"
+              type="number"
+              min=".2"
+              max="120"
+              step=".1"
+              value="10" /></label
+          ><label
+            >Voltage per vertical pixel (µV/px)<input
+              id="uv"
+              type="number"
+              min=".001"
+              max="100"
+              step=".01"
+              value="1"
+          /></label>
+          <p class="muted">
+            Use a visible voltage calibration bar: µV ÷ its height in captured
+            pixels. A printed µV/mm setting alone does not establish µV/px.
+          </p>
+          <label
+            >Calibration bar amplitude (µV)<input
+              id="cal-uv"
+              type="number"
+              min="1"
+              max="1000"
+              value="50" /></label
+          ><button id="calibrate">Measure bar: click its two ends</button
+          ><label
+            >Display progression<select id="progression">
+              <option value="scroll">Continuous scrolling</option>
+              <option value="sweep">Sweep with colored vertical cursor</option>
+            </select></label
+          ><label
+            >Polarity<select id="polarity">
+              <option value="up">Negative up</option>
+              <option value="down">Negative down</option>
+            </select></label
+          >
+        </div>
+        <div class="setup-fields">
+          <label
+            >High-pass cutoff (Hz)<input
+              id="hp"
+              type="number"
+              min="0"
+              max="100"
+              step=".1"
+              placeholder="Unknown" /></label
+          ><label
+            >Low-pass cutoff (Hz)<input
+              id="lp"
+              type="number"
+              min="1"
+              max="1000"
+              step="1"
+              placeholder="Unknown" /></label
+          ><label
+            >Notch<select id="notch">
+              <option value="unknown">Unknown</option>
+              <option value="off">Off</option>
+              <option value="50">50 Hz</option>
+              <option value="60">60 Hz</option>
+            </select></label
+          ><label
+            >Row baseline offset (captured pixels)<input
+              id="row-offset"
+              type="number"
+              value="0"
+              min="-100"
+              max="100" /></label
+          ><button id="check-rows">Show extraction alignment</button
+          ><label
+            ><input id="confirmed" type="checkbox" />I verified the rows,
+            polarity, time and voltage scales.</label
+          >
+          <p class="muted">
+            Uncertain recognition is editable. Layout or detected setting
+            changes stop reconstruction until reviewed.
+          </p>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="begin" class="primary">Begin local visualization</button
+        ><button id="cancel-setup">Cancel capture</button>
+      </div>
+    </dialog>
+    <dialog id="help">
+      <form method="dialog">
+        <button class="close" aria-label="Close guide">×</button>
+      </form>
+      <h2>A field with memory</h2>
+      <p>
+        Select an EEG application window. Draw the waveform, label and settings
+        regions, then confirm the montage and scales. All image processing and
+        OCR run on this device. No account or cloud AI is needed by this
+        application.
+      </p>
+      <p>
+        Live surface shows the latest two-second analysis window. Signed
+        displacement uses the newest reconstructed sample relative to the window
+        mean. Spectral light updates every half second; motion is not a playback
+        of every EEG cycle. Each frequency band occupies a separate translucent
+        surface. Isolate a band to inspect mixed spectra without overlap.
+      </p>
+      <p>
+        Whole history places older intervals outward. Side profile spreads them
+        along an axis. Drag to rotate, scroll to approach, or enter the field
+        with WASD and drag. Lens changes perspective; Time expansion opens time
+        around your selection. Section removes an obstructing portion.
+      </p>
+      <p>
+        Bright areas indicate amplitude, not abnormality. The prevalence
+        statistic instead shows the fraction of valid time represented by
+        analysis windows at or above your band RMS threshold. It describes the
+        selected amplitude criterion, not seizure burden. Interpolation
+        illustrates montage measurements; it does not estimate cortical sources
+        or connectivity. Empty regions can mean unavailable measurements.
+        Derived connections require a valid graph path. Filter-affected
+        frequency surfaces are hatched in the WebGL view.
+      </p>
+      <p>
+        Capture must be running while the source display advances. Hidden,
+        clipped, overlapped or filtered-out information cannot be recovered by
+        zooming. This first extractor supports separated rows and continuous
+        scrolling or a clearly colored sweep cursor; vendor recognition and
+        clinical performance remain unvalidated. The original EEG application
+        remains the source for morphology and clinical interpretation.
+      </p>
+      <p>
+        Quantitative history compresses for the overview, preserving peaks,
+        valid duration and gaps. Optional local storage retains the original
+        quantitative frames for detailed time selection; it does not archive
+        waveform screenshots or the original recording. Browser storage can be
+        cleared or exhausted.
+      </p>
+    </dialog>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
