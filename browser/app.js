@@ -53,9 +53,9 @@ for (const [slot, name] of PATIENTS.entries()) {
     (slot + 3) +
     ' · ' +
     VOICE_PROFILES[slot].name +
-    '</span></button><div class="patient-source">No source</div><div class="patient-state">Not started</div><div class="patient-levels" aria-hidden="true"></div><div class="pattern-state"></div><div class="script-state"></div><div class="actions"><button data-action="mute" aria-pressed="false">Mute</button><button data-action="focus" aria-pressed="false">Focus</button><button data-action="identify">Identify</button><button data-action="baseline">Pin baseline</button></div><label>Gain <input type="range" min="0" max="150" value="100" aria-label="Patient ' +
+    '</span></button><div class="patient-source">No source</div><div class="patient-state">Not started</div><div class="patient-levels" aria-hidden="true"></div><div class="pattern-state"></div><div class="script-state"></div><div class="actions"><button data-action="mute" aria-pressed="false">Mute</button><button data-action="focus" aria-pressed="false">Focus</button><button data-action="identify">Test voice</button></div><details><summary>Adjust</summary><button data-action="baseline">Pin baseline</button><label>Gain <input type="range" min="0" max="150" value="100" aria-label="Patient ' +
     name +
-    ' gain"><output>1.0×</output></label>';
+    ' gain"><output>1.0×</output></label></details>';
   for (const band of BANDS) {
     const bar = document.createElement('i');
     bar.style.background = band.color;
@@ -178,7 +178,14 @@ function refreshCards() {
       review: 'Capture needs review',
     };
     card.querySelector('.patient-state').textContent =
-      (labels[state] || state) +
+      (state === 'live'
+        ? !mixer.enabled || mixer.context?.state !== 'running'
+          ? 'Signal ready · enable sound'
+          : !mixer.volume ? 'Master volume is zero'
+          : !s.gain ? 'Patient volume is zero'
+          : audioLevels(s.frame, mixer).levels.some(l => l.gain > 0)
+            ? 'Playing EEG' : 'Signal received · selected bands quiet'
+        : labels[state] || state) +
       (s.muted
         ? ' · MUTED'
         : mixer.focus >= 0 && mixer.focus !== slot
@@ -199,23 +206,9 @@ function refreshCards() {
     card.querySelector('output').textContent = s.gain.toFixed(1) + '×';
     const pattern = mixer.trackers[slot].value;
     card.querySelector('.pattern-state').textContent =
-      state !== 'live'
-        ? ''
-        : (pattern.repetitionHz
-            ? pattern.distribution +
-              ' sharp candidates · ' +
-              pattern.repetitionHz.toFixed(1) +
-              '/s · '
-            : '') +
-          (pattern.available
-            ? 'Emphasis ' +
-              Math.round(pattern.emphasis * 100) +
-              '% · persistence ' +
-              Math.round(pattern.persistence) +
-              's' +
-              (pattern.sustained ? ' · sustained attention (10s+)' : '')
-            : 'Sharp-shape detail unavailable') +
-          (pattern.baseline ? ' · baseline pinned' : ' · no baseline');
+      state === 'live' && pattern.persistence > 0
+        ? 'Change · ' + Math.round(pattern.persistence) + 's'
+        : '';
     card.querySelector('.script-state').textContent =
       metadata.source === 'demo' && !inExercise
         ? 'PROGRAMMED · ' + demoPhase(slot, panels[slot]?.time() || 0)
@@ -238,16 +231,29 @@ function refreshCards() {
     String(mixer.enabled && mixer.context?.state === 'running'),
   );
   $('audio-status').textContent = !mixer.enabled
-    ? 'Sound off · capture runs independently'
+    ? 'Sound off · select Enable sound'
     : mixer.context?.state !== 'running'
       ? 'Audio interrupted · select Enable sound'
-      : (mixer.ambient ? 'Ambient + persistence' : 'Band sound only') +
-        ' · live audio is independent of visual review';
+      : (mixer.volume ? 'Sound on' : 'Master volume is zero');
   const capturing = panels.some((p) => p.hasCapture());
   $('demo-all').disabled = capturing || inExercise;
   $('exercise-open').disabled = capturing || inExercise;
 }
 
+$('speaker-test').onclick = async () => {
+  try {
+    await mixer.enable();
+    if (!mixer.volume) {
+      message('Raise master volume, then test the speaker again.');
+      return;
+    }
+    mixer.identify(selected);
+    message('Speaker test · reference tone, not patient activity.');
+  } catch {
+    message('Sound blocked. Check this tab’s sound permission and device output.');
+  }
+  refreshCards();
+};
 $('audio').onclick = async () => {
   if (mixer.enabled && mixer.context?.state === 'running') mixer.disable();
   else {
@@ -327,6 +333,7 @@ function exerciseControls() {
   });
   panels.forEach((p) => p.lock(inExercise));
   $('sound-check').disabled = trialRunning || practiceRunning;
+  $('speaker-test').disabled = inExercise;
   $('trial-unheard').disabled = !trialRunning;
 }
 $('exercise-open').onclick = () => {

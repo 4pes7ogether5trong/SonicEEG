@@ -645,3 +645,19 @@ body.exercise-active .patient-card [data-action='baseline'] {
     font-size: 0.875rem;
   }
 }
+
+/* Keep the field and immediate actions prominent; details stay available on demand. */
+#monitor-message:empty { display: none; }
+.toolbar-more { position: relative; }
+.toolbar-more[open] > .actions { padding: .6rem 0; }
+summary { cursor: pointer; font-size: .875rem; min-height: 42px; padding: .55rem 0; }
+aside > details { border-bottom: 1px solid var(--border); padding: .5rem 1rem; }
+aside > details > label { margin-bottom: .8rem; }
+aside { display: flex; flex-direction: column; }
+.capture-feedback { order: -1; }
+.patient-source { display: none; }
+.patient-card .pattern-state:empty, .patient-card .script-state:empty { display: none; }
+.patient-card details { margin: 0; }
+.patient-card details > label { margin-top: .6rem; }
+.sound-options > .mixer-controls { padding: .5rem; }
+[data-id='capture-status'] { margin: .5rem 0; overflow-wrap: anywhere; }

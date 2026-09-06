@@ -20,14 +20,14 @@
     <header class="monitor-header">
       <div class="identity">
         <span class="orbmark" aria-hidden="true"></span>
-        <div><b>SonicEEG</b><span>Ambient voices · living field</span></div>
+        <div><b>SonicEEG</b></div>
       </div>
       <div class="actions">
         <button id="audio" class="primary" aria-pressed="false">
           Enable sound</button
-        ><button id="demo-all">Play guided synthetic demo</button
+        ><button id="speaker-test">Test speaker</button><details class="toolbar-more"><summary>Practice</summary><div class="actions"><button id="demo-all">Synthetic demo</button
         ><button id="exercise-open">Listening exercise</button
-        ><button id="stop-all">Stop all</button>
+        ></div></details><button id="stop-all">Stop all</button>
       </div>
     </header>
     <section class="mixer" aria-label="Four patient audio mixer">
@@ -43,7 +43,7 @@
             value="35"
           /><output id="master-value">35%</output></label
         >
-        <label
+        <details class="sound-options"><summary>Sound options</summary><div class="mixer-controls"><label
           >Spatial sound
           <select id="audio-spatial">
             <option value="maximum">Focal maximum</option>
@@ -66,14 +66,11 @@
           ><input id="ambient" type="checkbox" checked />Persistence
           emphasis</label
         >
-        <span id="audio-status" role="status"
-          >Sound off · capture runs independently</span
+        </div></details><span id="audio-status" role="status"
+          >Sound off</span
         >
       </div>
-      <p id="monitor-message" role="status">
-        Audio output has increased. Start with low device volume. The guided
-        demo begins with quiet background, then brief and sustained changes.
-      </p>
+      <p id="monitor-message" role="status"></p>
     </section>
     <section id="exercise" hidden aria-label="Synthetic listening exercise">
       <div class="spread">
@@ -123,7 +120,7 @@
     </section>
     <div id="panels"></div>
     <footer>
-      <span>Research MVP · verify findings in the source EEG application</span
+      <span>Attention companion · not a diagnostic tool</span
       ><span
         >Local image processing · no screenshots or patient headers
         uploaded</span
@@ -156,17 +153,11 @@
           <div data-id="stage">
             <div data-id="empty">
               <h1>Capture a patient window.</h1>
-              <p>
-                Capture the EEG application window, confirm its montage and
-                scales, then explore the field through time.
-              </p>
-              <p class="muted">
-                Screen pixels and measurements are processed on this device.
-              </p>
+              <p>Select Capture EEG window to begin.</p>
             </div>
             <div class="orientation">L / R follow the electrode labels</div>
             <div data-id="view-label">
-              Measurement surface · no cortical source estimation
+              Live field
             </div>
           </div>
           <div class="navigation">
@@ -225,8 +216,7 @@
           </div>
         </section>
         <aside>
-          <section>
-            <h2>Read the field</h2>
+          <details><summary>Field controls</summary>
             <label
               >Channel or derivation<select data-id="channel">
                 <option value="">All observed channels</option>
@@ -276,15 +266,15 @@
             <div class="actions">
               <button data-id="pause" aria-pressed="false">Freeze view</button>
             </div>
-          </section>
-          <section>
-            <h2>Recording context</h2>
-            <div data-id="montage-name">Montage not confirmed</div>
+          </details>
+          <section class="capture-feedback">
+            <h2>Capture</h2>
+            <details><summary>Source details</summary><div data-id="montage-name">Montage not confirmed</div>
             <div data-id="filter-state" class="muted">Filters unknown</div>
             <div data-id="settings-watch" class="muted">
               Automatic settings check inactive.
             </div>
-            <div data-id="capture-status" role="status">
+            </details><div data-id="capture-status" role="status">
               Capture a window or select the synthetic example.
             </div>
             <button data-id="setup-again" hidden>Review capture setup</button>
@@ -294,8 +284,7 @@
               <ul data-id="availability"></ul>
             </details>
           </section>
-          <section>
-            <h2>On this device</h2>
+          <details><summary>Saved history</summary>
             <label
               ><input data-id="save-local" type="checkbox" />Keep quantitative
               history locally</label
@@ -314,7 +303,7 @@
               ><button data-id="erase">Delete selected</button>
             </div>
             <div data-id="storage-state" role="status"></div>
-          </section>
+          </details>
         </aside>
       </main>
 
@@ -440,7 +429,7 @@
         </div>
         <div class="actions">
           <button data-id="begin" class="primary">
-            Begin capture and analysis</button
+            Start capture + sound</button
           ><button data-id="cancel-setup">Cancel capture</button>
         </div>
       </dialog>

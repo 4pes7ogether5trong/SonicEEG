@@ -47,6 +47,7 @@ self.onmessage = ({ data: m }) => {
       type: 'status',
       reason: block.reason || 'New EEG columns reconstructed',
       accepted: !!block.channels,
+      gap: !!block.gap,
       channels: channels.map((c) => ({
         name: c.name,
         quality: c.quality,

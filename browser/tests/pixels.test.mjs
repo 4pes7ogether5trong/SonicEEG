@@ -46,6 +46,34 @@ const rows = [
   { name: 'F7-T7', y: 35 },
   { name: 'F8-T8', y: 95 },
 ];
+test('Worker distinguishes an unchanged capture from a real signal gap', async () => {
+  const oldSelf = globalThis.self, oldPost = globalThis.postMessage;
+  const messages = [];
+  globalThis.self = {};
+  globalThis.postMessage = (m) => messages.push(m);
+  try {
+    await import('../signal-worker.js');
+    self.onmessage({ data: { type: 'configure', config: {
+      rows, uvPerPixel: 2, seconds: 4, mode: 'scroll', settings: {}, segment: '1',
+    } } });
+    const push = (img, wall) => self.onmessage({ data: {
+      type: 'pixels', width: img.width, height: img.height,
+      buffer: img.data.buffer, wall,
+    } });
+    push(image(), 0);
+    push(image(), .5);
+    assert.equal(messages.at(-1).accepted, false);
+    assert.equal(messages.at(-1).gap, false);
+    assert.equal(messages.at(-1).reason, 'Screen has not advanced');
+    const blank = image();
+    blank.data.fill(255);
+    push(blank, 1);
+    assert.equal(messages.at(-1).gap, true);
+  } finally {
+    globalThis.self = oldSelf;
+    globalThis.postMessage = oldPost;
+  }
+});
 test('Generated EEG pixels recover the programmed rhythm and amplitude', () => {
   const result = extractTraces(image(), rows, { uvPerPixel: 2 });
   assert.equal(result.length, 2);

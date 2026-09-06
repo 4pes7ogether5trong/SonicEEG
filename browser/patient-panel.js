@@ -639,7 +639,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
         if (m.type === 'status') {
           busy = false;
           status(m.reason);
-          if (!m.accepted) audio.unavailable(slot);
+          if (m.gap) audio.unavailable(slot);
         }
         if (m.type === 'ready') busy = false;
         if (m.type === 'error') {
@@ -1051,7 +1051,16 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
   };
   $('recognize').onclick = readLabels;
   $('check-rows').onclick = checkRows;
-  $('begin').onclick = begin;
+  $('begin').onclick = async () => {
+    // Resume in the click gesture, before history/storage awaits lose activation.
+    try {
+      await audio.enable();
+    } catch {
+      text('setup-status', 'Sound could not start. Check browser sound permission, then retry.');
+      return;
+    }
+    await begin();
+  };
   $('cancel-setup').onclick = () => {
     $('setup').close();
     stop();
