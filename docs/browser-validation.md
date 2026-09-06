@@ -2,7 +2,7 @@
 
 ## Checks completed for this revision
 
-`npm test` exercises 44 tests with Node's test runner, generated image fixtures, local Tesseract OCR, fake IndexedDB and an AudioContext scheduling double. These are code-level checks, not browser interaction or physical listening tests. The ambient revision adds 12 checks to the preceding 32-test suite.
+`npm test` exercises 47 tests with Node's test runner, generated image fixtures, local Tesseract OCR, fake IndexedDB and an AudioContext scheduling double. These are code-level checks, not browser interaction or physical listening tests. The timing/settings refinement adds three regressions to the 44-test ambient revision: observed train onset and the continuous ten-second emphasis curve, confirmed-setting comparisons through OCR dropout, and filter-only value validation.
 
 | Property | Evidence |
 | --- | --- |

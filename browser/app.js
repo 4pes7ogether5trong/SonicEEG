@@ -212,7 +212,8 @@ function refreshCards() {
               Math.round(pattern.emphasis * 100) +
               '% · persistence ' +
               Math.round(pattern.persistence) +
-              's'
+              's' +
+              (pattern.sustained ? ' · sustained attention (10s+)' : '')
             : 'Sharp-shape detail unavailable') +
           (pattern.baseline ? ' · baseline pinned' : ' · no baseline');
     card.querySelector('.script-state').textContent =

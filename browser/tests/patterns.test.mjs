@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PatternTracker, transientFeatures } from '../patterns.js';
+import {
+  PatternTracker,
+  transientFeatures,
+  persistenceEmphasis,
+} from '../patterns.js';
 import { FeaturePipeline } from '../pipeline.js';
 import { patientDemoBlock, DEMO_LENGTH, DEMO_EVENTS } from '../demo.js';
 import { TRIALS, trialEvents, TRIAL_DURATION } from '../exercise.js';
@@ -44,6 +48,60 @@ const frame = (end, rms = 10, extra = {}) => ({
   settings: { hp: 0.5, lp: 45 },
   channels: [row(rms)],
   ...extra,
+});
+
+test('Ten-second attention landmark follows observed train onset and does not advance from repeated reads or missing cycles', () => {
+  const tracker = new PatternTracker();
+  const emit = (end, eventTime) =>
+    tracker.update(
+      frame(end, 10, {
+        channels: [
+          row(
+            10,
+            'F7-T7',
+            eventTime == null
+              ? []
+              : [
+                  {
+                    time: eventTime,
+                    amplitude: 60,
+                    width: 0.03,
+                    afterwave: 0.2,
+                  },
+                ],
+          ),
+        ],
+      }),
+    );
+  for (let end = 0.5; end <= 11; end += 0.5) {
+    const value = emit(end, Number.isInteger(end) ? end - 0.2 : null);
+    if (end === 3) assert.ok(Math.abs(value.sharpSeconds - 2) < 1e-9);
+    if (end === 10) assert.equal(value.sustained, false);
+    if (end === 11) {
+      assert.equal(value.sharpSeconds, 10);
+      assert.equal(value.sustained, true);
+    }
+  }
+  const value = emit(11, 10.8);
+  assert.equal(value.sharpSeconds, 10);
+  assert.equal(
+    emit(11.5, null).sharpSeconds,
+    10,
+    'waiting for a next cycle is not extra observed duration',
+  );
+  emit(13, null);
+  for (let end = 14; end <= 16; end++) emit(end, end - 0.2);
+  assert.ok(tracker.value.sharpSeconds < 3);
+  assert.equal(tracker.value.sustained, false);
+  assert.ok(
+    persistenceEmphasis(10.5, 0) - persistenceEmphasis(10, 0) >
+      persistenceEmphasis(9.5, 0) - persistenceEmphasis(9, 0),
+  );
+  assert.ok(
+    Math.abs(persistenceEmphasis(10, 0) - persistenceEmphasis(9.999, 0)) <
+      0.001,
+    'no loudness step at the landmark',
+  );
 });
 
 test('Guided synthetic shapes recover programmed counts, repetition rates and sensor-side extent', () => {

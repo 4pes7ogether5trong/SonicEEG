@@ -55,6 +55,8 @@ For an immediate demonstration, start with low device volume and choose **Play g
 
 Labels and readable settings are rechecked about every five seconds. A discrepancy or lost alignment requests setup review and marks recent measurements uncertain. Settings that are not readable cannot be monitored automatically. An uncertain channel does not become a zero-amplitude channel.
 
+Use **Filters changed** for a filter-only adjustment; confirm that timebase, sensitivity, montage and geometry remain unchanged. Other changes require full setup review. Each confirmed change starts a separate context and clears incompatible baseline comparisons. Persistence emphasis remains modest initially and increases more strongly after ten seconds of observed sustained activity; it is not a seizure classifier. The guided synthetic examples and listening trials use this same mapping.
+
 ## Design and evidence
 
 See [visual and measurement design](docs/browser-field-design.md) for the mapping equations, privacy boundary, temporal compression, limitations and corrections to the earlier concept. See [validation and comparison protocol](docs/browser-validation.md) for completed checks and the work still needed on actual EEG displays and physical devices.

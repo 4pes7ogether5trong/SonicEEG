@@ -1,6 +1,15 @@
 import { parseDerivation, POSITIONS } from './montage.js';
 
 const clamp = (x) => Math.max(0, Math.min(1, x));
+export const EMPHASIS_LANDMARK_SECONDS = 10;
+export function persistenceEmphasis(seconds, recurrence) {
+  const early = 0.35 * clamp(seconds / EMPHASIS_LANDMARK_SECONDS);
+  const sustained =
+    seconds >= EMPHASIS_LANDMARK_SECONDS
+      ? 0.45 * (1 - Math.exp(-(seconds - EMPHASIS_LANDMARK_SECONDS) / 6))
+      : 0;
+  return clamp(early + sustained + 0.2 * clamp(recurrence));
+}
 const median = (values) => {
   const a = [...values].sort((x, y) => x - y);
   return a.length
@@ -75,6 +84,8 @@ export class PatternTracker {
     this.lastEnd = null;
     this.context = null;
     this.run = 0;
+    this.sequenceOnset = null;
+    this.deviationOnset = null;
     this.memory = 0;
     this.value = {
       emphasis: 0,
@@ -100,6 +111,7 @@ export class PatternTracker {
     this.value.baseline = true;
     this.value.deviation = 0;
     this.value.changed = false;
+    this.deviationOnset = null;
     return true;
   }
   update(frame) {
@@ -176,8 +188,10 @@ export class PatternTracker {
     this.recent = this.recent.filter((e) => e.time >= frame.end - 12);
     let sequence = this.recent;
     for (let i = 1; i < this.recent.length; i++)
-      if (this.recent[i].time - this.recent[i - 1].time > 3)
+      if (this.recent[i].time - this.recent[i - 1].time > 3) {
         sequence = this.recent.slice(i);
+        this.sequenceOnset = null;
+      }
     const intervals = sequence
       .slice(1)
       .map((e, i) => e.time - sequence[i].time);
@@ -195,12 +209,24 @@ export class PatternTracker {
       sequence.length >= 3 &&
       frame.end - sequence.at(-1).time <
         Math.min(3, Math.max(1.2, interval * 1.8));
+    if (repeated) this.sequenceOnset ??= sequence[0].time;
+    const sharpSeconds = repeated
+      ? Math.max(0, sequence.at(-1).time - this.sequenceOnset)
+      : 0;
+    if (!repeated) this.sequenceOnset = null;
+    // An expired train cannot be joined to a later burst merely because its
+    // old candidates are still in the short history. Recurrence remains separate.
+    if (sequence.length >= 3 && !repeated) this.recent = [];
+    if (deviation > 0.35) this.deviationOnset ??= frame.start;
+    else this.deviationOnset = null;
+    const deviationSeconds =
+      this.deviationOnset == null ? 0 : frame.end - this.deviationOnset;
     const ongoing = repeated || deviation > 0.35;
-    this.run = ongoing ? this.run + dt : 0;
+    this.run = Math.max(sharpSeconds, deviationSeconds);
     const target = ongoing || events.length ? 1 : 0;
     this.memory +=
       (target - this.memory) * (1 - Math.exp(-dt / (target ? 10 : 18)));
-    const desired = 0.7 * (1 - Math.exp(-this.run / 10)) + 0.3 * this.memory;
+    const desired = persistenceEmphasis(this.run, this.memory);
     const emphasis =
       desired > this.value.emphasis
         ? desired
@@ -212,6 +238,9 @@ export class PatternTracker {
     this.value = {
       emphasis: clamp(emphasis),
       persistence: this.run,
+      sharpSeconds,
+      deviationSeconds,
+      sustained: this.run >= EMPHASIS_LANDMARK_SECONDS,
       recurrence: this.memory,
       regularity,
       changed,

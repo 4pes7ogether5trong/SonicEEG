@@ -6,6 +6,7 @@ import { BrowserCapture } from './capture.js';
 import { FluidField } from './field.js';
 import { patientDemoBlock, DEMO_LENGTH } from './demo.js';
 import { extractTraces } from './pixels.js';
+import { settingsDifference, validFilters } from './display-settings.js';
 export function mountPatient(root, audio, slot, onState = () => {}) {
   let visible = false,
     preloading = false,
@@ -39,6 +40,8 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     ocrRows = [],
     ocrLabels = '',
     lastDetected = null,
+    confirmedDisplay = null,
+    filterOnlyEligible = false,
     dimensions = [],
     watchAt = 0,
     calibration = null,
@@ -92,13 +95,15 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       hp: number('hp'),
       lp: number('lp'),
       notch: $('notch').value === 'unknown' ? null : $('notch').value,
+      secondsPerCrop: number('seconds'),
+      uvPerPixel: number('uv'),
     };
   }
   function context(frame) {
     const s = frame?.settings || {};
     text(
       'filter-state',
-      `HP ${s.hp ?? '?'} Hz · LP ${s.lp ?? '?'} Hz · notch ${s.notch ?? '?'}${frame?.mixed ? ' · mixed settings: expand time' : ''}`,
+      `HP ${s.hp ?? '?'} Hz · LP ${s.lp ?? '?'} Hz · notch ${s.notch ?? '?'}${s.secondsPerCrop != null ? ` · ${s.secondsPerCrop}s/crop · ${s.uvPerPixel} µV/px` : ''}${frame?.mixed ? ' · mixed settings: expand time' : ''}`,
     );
   }
   function newHistory(kind, save = true) {
@@ -304,6 +309,9 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     audio.stop(slot);
     $('stop').hidden = true;
     $('setup-again').hidden = true;
+    $('filters-quick').hidden = true;
+    confirmedDisplay = null;
+    filterOnlyEligible = false;
     status('Stopped. The captured history remains available.');
     text(
       'source-state',
@@ -584,6 +592,12 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       }
       reviewStarted = null;
       confirmedNames = rows.map((r) => r.name).join('|');
+      confirmedDisplay = {
+        ...s,
+        seconds: lastDetected?.seconds ?? null,
+        sensitivity: lastDetected?.sensitivity ?? null,
+      };
+      filterOnlyEligible = true;
       active = true;
       audio.begin(slot);
       segment++;
@@ -592,6 +606,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       $('setup').close();
       $('stop').hidden = false;
       $('setup-again').hidden = false;
+      $('filters-quick').hidden = false;
       text('source-state', 'Local window capture');
       text(
         'montage-name',
@@ -641,7 +656,10 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       text('setup-status', e.message);
     }
   }
-  function suspend(reason) {
+  function suspend(reason, filtersOnly = false) {
+    operation++;
+    reading = false;
+    filterOnlyEligible = filtersOnly;
     if (active) reviewStarted = performance.now();
     active = false;
     clearInterval(timer);
@@ -696,25 +714,27 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
           next = checked.settings;
         if (token !== operation || version !== capture.version || !active)
           return;
-        const changed =
-          next &&
-          lastDetected &&
-          Object.keys(next).some(
-            (k) => lastDetected[k] != null && next[k] !== lastDetected[k],
-          );
+        const difference = regions.settings
+          ? settingsDifference(confirmedDisplay, next)
+          : { needsReview: false, changed: [], unreadable: [] };
         const layoutChanged =
           checked.rows &&
           checked.rows.map((r) => r.name).join('|') !== confirmedNames;
-        if (changed || layoutChanged) {
+        if (difference.needsReview || layoutChanged) {
           markUncertain();
           suspend(
-            'The layout or display settings no longer match the confirmed capture. Recent frames are marked uncertain; review setup.',
+            'Display settings changed or became unreadable. Recent frames are uncertain; confirm the display before resuming.',
+            !layoutChanged &&
+              difference.unreadable.length === 0 &&
+              difference.changed.every((k) =>
+                ['hp', 'lp', 'notch'].includes(k),
+              ),
           );
           $('confirmed').checked = false;
           lastDetected = next;
           return;
         }
-        lastDetected = next;
+        // Preserve confirmed values through absent/unreadable OCR results.
       } catch {
         if (token === operation && version === capture.version) {
           markUncertain();
@@ -946,6 +966,71 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     $('setup').showModal();
     drawPreview();
   };
+  $('filters-quick').onclick = () => {
+    if (!capture.stream || !confirmedDisplay) return;
+    if (!active && !filterOnlyEligible) {
+      status(
+        'The layout, timebase or calibration needs full review. Choose Review capture setup.',
+        true,
+      );
+      return;
+    }
+    markUncertain();
+    suspend(
+      'Filter review: this patient is paused; other patients continue.',
+      true,
+    );
+    const proposed = lastDetected || settings();
+    for (const k of ['hp', 'lp']) $('quick-' + k).value = proposed[k] ?? '';
+    $('quick-notch').value = ['off', '50', '60'].includes(proposed.notch)
+      ? proposed.notch
+      : 'unknown';
+    $('quick-confirm').checked = false;
+    text(
+      'quick-status',
+      'Only filters changed. If timebase, sensitivity, montage or layout also changed, use full setup.',
+    );
+    $('quick-filters').showModal();
+  };
+  $('quick-apply').onclick = async () => {
+    const s = {
+      hp: number('quick-hp'),
+      lp: number('quick-lp'),
+      notch:
+        $('quick-notch').value === 'unknown' ? null : $('quick-notch').value,
+    };
+    if (
+      !$('quick-confirm').checked ||
+      !validFilters(s) ||
+      !capture.stream ||
+      capture.dimensions().join() !== dimensions.join()
+    ) {
+      text(
+        'quick-status',
+        'Confirm unchanged geometry and valid filter values. Resized windows require full setup.',
+      );
+      return;
+    }
+    for (const k of ['hp', 'lp']) $(k).value = s[k] ?? '';
+    $('notch').value = s.notch ?? 'unknown';
+    lastDetected = { ...lastDetected, ...s };
+    $('confirmed').checked = true;
+    await begin();
+    if (active) $('quick-filters').close();
+    else
+      text(
+        'quick-status',
+        'Capture could not resume. Use full setup to review the source.',
+      );
+  };
+  $('quick-full').onclick = () => {
+    $('quick-filters').close();
+    $('setup-again').click();
+  };
+  $('quick-cancel').onclick = () => {
+    $('quick-filters').close();
+    status('This patient remains paused pending settings review.');
+  };
   $('recognize').onclick = readLabels;
   $('check-rows').onclick = checkRows;
   $('begin').onclick = begin;
@@ -1032,7 +1117,13 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       if (value) render();
     },
     lock(value) {
-      for (const id of ['capture', 'demo', 'restore', 'setup-again'])
+      for (const id of [
+        'capture',
+        'demo',
+        'restore',
+        'setup-again',
+        'filters-quick',
+      ])
         $(id).disabled = value;
     },
   };

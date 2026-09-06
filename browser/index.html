@@ -285,6 +285,7 @@
               Capture a window or select the synthetic example.
             </div>
             <button data-id="setup-again" hidden>Review capture setup</button>
+            <button data-id="filters-quick" hidden>Filters changed</button>
             <details>
               <summary>Channel availability</summary>
               <ul data-id="availability"></ul>
@@ -440,6 +441,46 @@
           ><button data-id="cancel-setup">Cancel capture</button>
         </div>
       </dialog>
+      <dialog data-id="quick-filters" aria-label="Confirm filter-only change">
+        <h2>Confirm this patient's filters</h2>
+        <p>Capture is paused. History is retained. Other patients continue.</p>
+        <label
+          >High-pass / low-frequency filter (Hz)<input
+            data-id="quick-hp"
+            type="number"
+            min="0"
+            step="any"
+            placeholder="Unknown"
+        /></label>
+        <label
+          >Low-pass / high-frequency filter (Hz)<input
+            data-id="quick-lp"
+            type="number"
+            min="0"
+            step="any"
+            placeholder="Unknown"
+        /></label>
+        <label
+          >Notch<select data-id="quick-notch">
+            <option value="unknown">Unknown</option>
+            <option value="off">Off</option>
+            <option value="50">50 Hz</option>
+            <option value="60">60 Hz</option>
+          </select></label
+        >
+        <label
+          ><input data-id="quick-confirm" type="checkbox" />I verified the
+          filters. Timebase, sensitivity, montage, polarity, window size and row
+          positions are unchanged.</label
+        >
+        <p data-id="quick-status" role="status"></p>
+        <div class="actions">
+          <button data-id="quick-apply" class="primary">
+            Confirm and resume</button
+          ><button data-id="quick-full">Review full setup</button
+          ><button data-id="quick-cancel">Keep paused</button>
+        </div>
+      </dialog>
       <dialog data-id="help">
         <form method="dialog">
           <button class="close" aria-label="Close guide">×</button>
@@ -455,12 +496,15 @@
           stereo location, and comfortable device levels still need checking.
         </p>
         <p>
-          Persistence emphasis adds brief accents for measured sharp candidates
-          and a bounded increase in brightness and prominence when changes
-          repeat or persist. A separate held E tone carries emphasis, not band
-          power. Emphasis releases gradually after the pattern ends. There is no
-          decorative beat, noise layer or artificial EEG rhythm. Turn emphasis
-          off to hear the band mapping alone.
+          Persistence emphasis increases more strongly after ten seconds of
+          observed sustained activity, without a sudden volume step. This is an
+          attention landmark, not a seizure threshold. It adds brief accents for
+          measured sharp candidates and a bounded increase in brightness and
+          prominence when changes repeat or persist. A separate held E tone
+          carries emphasis, not band power. Emphasis releases gradually after
+          the pattern ends. There is no decorative beat, noise layer or
+          artificial EEG rhythm. Turn emphasis off to hear the band mapping
+          alone.
         </p>
         <p>
           These are experimental shape and repetition descriptors, not detection
@@ -468,9 +512,13 @@
           also trigger emphasis. Sharp-shape analysis requires at least 100
           displayed samples per second; missing samples make it unavailable.
           Filtering, reference and screen resolution can alter or hide shapes.
-          Pin baseline uses the current two-second measured spectrum as a fixed
-          reference; select a clean interval in the source EEG first. It does
-          not diagnose normality. Source or recording-setting changes clear it.
+          Use Filters changed for a filter-only adjustment; timebase,
+          sensitivity or montage changes require full setup. History is retained
+          with a settings boundary, and incompatible comparison baselines are
+          cleared. Pin baseline uses the current two-second measured spectrum as
+          a fixed reference; select a clean interval in the source EEG first. It
+          does not diagnose normality. Source or recording-setting changes clear
+          it.
         </p>
         <p>
           The default uses the largest observed band power on each side to keep
