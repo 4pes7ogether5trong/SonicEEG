@@ -1,5 +1,6 @@
 import { mergeBaseline } from './baseline.js';
 import { chooseWaveform } from './waveform.js';
+import { mergeDroplets } from './fluid-episodes.js';
 export function mergeBins(a, b) {
   const mixed = a.mixed || b.mixed || a.segment !== b.segment,
     start = a.start,
@@ -53,6 +54,7 @@ export function mergeBins(a, b) {
     end,
     channels,
     waveform: chooseWaveform(a.waveform, b.waveform, mixed),
+    droplets: mergeDroplets(a.droplets, b.droplets),
     segment: mixed ? 'mixed' : a.segment,
     mixed,
     leaves: (a.leaves || 1) + (b.leaves || 1),
@@ -107,6 +109,7 @@ export class TemporalHistory {
       if (f.end > time) {
         f.settingsUncertain = true;
         f.waveform = null;
+        f.droplets = [];
         f.channels.forEach((c) => {
           c.valid = false;
           c.validSeconds = 0;
@@ -210,6 +213,7 @@ export class LocalArchive {
           if (f.end > time) {
             f.settingsUncertain = true;
             f.waveform = null;
+            f.droplets = [];
             f.channels.forEach((x) => {
               x.valid = false;
               x.validSeconds = 0;

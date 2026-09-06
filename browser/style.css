@@ -156,6 +156,18 @@ main {
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+.episode-info {
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 2.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.4rem;
+  background: #081320eb;
+  color: #dceafa;
+  font-size: 0.875rem;
+  pointer-events: none;
+}
 .segmented {
   display: flex;
   gap: 0.35rem;

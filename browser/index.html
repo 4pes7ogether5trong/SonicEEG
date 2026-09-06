@@ -151,6 +151,7 @@
               <option value="prevalence">Change prevalence</option>
             </select>
             <select data-id="surface-mode" aria-label="Surface representation">
+              <option value="fluid">Fluid dome</option>
               <option value="relief">Waveform relief</option>
               <option value="spectrum">Spectral field</option>
             </select>
@@ -166,6 +167,7 @@
               Color = strongest band · white ring = sharp candidate
             </div>
             <div data-id="view-label">Live field</div>
+            <div data-id="episode-info" class="episode-info" hidden></div>
           </div>
           <div class="navigation">
             <button data-id="home">Home view</button
@@ -207,6 +209,15 @@
         <aside>
           <details>
             <summary>Field controls</summary>
+            <label
+              >Droplets<select data-id="pattern-kind">
+                <option value="all">All patterns</option>
+                <option value="sharp">Sharp shapes</option>
+                <option value="periodic">Periodic repetition</option>
+                <option value="rhythmic">Rhythmic activity</option>
+                <option value="none">Hide droplets</option>
+              </select></label
+            >
             <label
               >Channel or derivation<select data-id="channel">
                 <option value="">All observed channels</option>
@@ -564,13 +575,31 @@
           account or cloud AI is needed by this application.
         </p>
         <p>
-          Waveform relief folds a two-second waveform onto each displayed derivation. Peaks rise;
-          negative deflections sink relative to that window's mean. A bipolar strip runs from its
-          first electrode to its second; a referential patch runs front to back. Along each strip is
-          time, not propagation through the brain. The dark dome is an orientation guide. Updates
-          arrive every half second without blending different waveform cycles together. Color off
-          reveals shape through lighting. The amplitude ruler changes relief depth; extreme
-          deflections are capped. Select one channel to separate overlapping strips.
+          Fluid dome joins local waveform ripples into a continuous surface. Distance from each
+          displayed electrode encodes recent waveform time; spreading rings do not represent neural
+          propagation or recovered brain sources. Bipolar measurements contribute opposing lobes at
+          the two electrode positions. Signed samples deform the surface, and directional
+          reflections reveal their crests and troughs. Unsupported regions stay dim. Color follows
+          the strongest local frequency contribution; Color off lets you inspect shape alone.
+        </p>
+        <p>
+          Droplets emerge around regions containing sharp shapes, periodic repetition or rhythmic
+          activity. They brighten with observed persistence, then fade over several seconds to a
+          lasting ghost. Sharp droplets are taller, periodic droplets have ridged sides, and
+          rhythmic droplets are rounder. These features can overlap and can include normal rhythms
+          and artifacts. They are descriptors, not diagnoses. Tap a droplet to inspect its time and
+          region. Field controls lets you isolate each type or hide droplets. A long history groups
+          older ghosts by region and type, keeping their time extent and latest example.
+        </p>
+        <p>
+          Waveform relief remains available for comparing individual strips. It folds a two-second
+          waveform onto each displayed derivation. Peaks rise; negative deflections sink relative to
+          that window's mean. A bipolar strip runs from its first electrode to its second; a
+          referential patch runs front to back. Along each strip is time, not propagation through
+          the brain. The dark dome is an orientation guide. Updates arrive every half second without
+          blending different waveform cycles together. Color off reveals shape through lighting. The
+          amplitude ruler changes relief depth; extreme deflections are capped. Select one channel
+          to separate overlapping strips.
         </p>
         <p>
           Recent stack shows up to six nonoverlapping retained windows, oldest at left. Whole

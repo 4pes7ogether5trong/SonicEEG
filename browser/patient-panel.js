@@ -5,6 +5,7 @@ import { FeaturePipeline } from './pipeline.js';
 import { BrowserCapture } from './capture.js';
 import { FluidField } from './field.js';
 import { recentWaveforms } from './waveform.js';
+import { FluidEpisodes, visibleDroplets, mergeDroplets, PATTERN_NAMES } from './fluid-episodes.js';
 import { patientDemoBlock, DEMO_LENGTH } from './demo.js';
 import {
   showcaseBlock,
@@ -27,7 +28,8 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     };
   const capture = new BrowserCapture(),
     archive = new LocalArchive(),
-    baselineMap = new BaselineMap();
+    baselineMap = new BaselineMap(),
+    episodes = new FluidEpisodes();
   let history = new TemporalHistory(),
     source = 'none',
     active = false,
@@ -80,6 +82,22 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
         text('renderer-state', status);
         if (status.startsWith('Software')) $('fly').disabled = true;
       },
+      (episode) => {
+        paused = false;
+        text('pause', 'Freeze view');
+        $('pause').setAttribute('aria-pressed', 'false');
+        $('follow').checked = false;
+        const onset = episode.exampleStart ?? episode.start;
+        $('time').value = String(
+          Math.min(history.end, onset + Math.min(2, Math.max(0.5, (episode.end - onset) / 2))),
+        );
+        text(
+          'episode-info',
+          `${PATTERN_NAMES[episode.kind]} · ${episode.region} · ${format(episode.start)}–${format(episode.end)}${episode.aggregate ? ' · history cluster' : ''}`,
+        );
+        $('episode-info').hidden = false;
+        selectTime();
+      },
     );
     field.visible = visible && visualsEnabled;
     return field;
@@ -120,6 +138,8 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
   }
   function newHistory(kind, save = true) {
     baselineMap.clear();
+    episodes.reset();
+    $('episode-info').hidden = true;
     $('demo-events').hidden = true;
     sessionToken++;
     history = new TemporalHistory();
@@ -162,6 +182,8 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     }
     // Every accepted interval carries its capture context. No screenshot bytes are retained.
     baselineMap.apply(frame);
+    frame.droplets = episodes.update(frame);
+    if (frame.waveform) frame.waveform.droplets = frame.droplets;
     history.add(frame);
     lastFrame = frame;
     if (localId && $('save-local').checked) {
@@ -200,7 +222,8 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     if ($('follow').checked) $('time').value = String(shownEnd);
     const focus = Number($('time').value),
       frequencyMap = $('color-mode').value === 'frequency',
-      relief = frequencyMap && $('surface-mode').value === 'relief',
+      fluid = frequencyMap && $('surface-mode').value === 'fluid',
+      relief = frequencyMap && $('surface-mode').value !== 'spectrum',
       frames =
         mode === 'recent'
           ? paused
@@ -222,10 +245,29 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     $('statistic').disabled = !frequencyMap || relief || mode === 'recent';
     $('occupancy-threshold').disabled = threshold < 0 || !frequencyMap;
     $('scale').disabled = threshold >= 0 || !frequencyMap;
+    const historyDrops =
+      fluid && mode === 'live'
+        ? mergeDroplets(
+            (paused ? frozenFrames : history.bins())
+              .filter((x) => x.end <= focus + 0.001)
+              .flatMap((x) => x.droplets || []),
+            [],
+            Infinity,
+          )
+        : [];
     field.update(frames, {
       map: $('color-mode').value,
       mode: mode === 'recent' ? 'side' : mode,
       relief,
+      fluid,
+      animate: !paused && active && $('follow').checked,
+      frozen: paused,
+      dropletsFor: (frame) =>
+        visibleDroplets(
+          mode === 'live' ? historyDrops : frame.droplets || [],
+          mode === 'live' ? focus : frame.end,
+          { kind: $('pattern-kind').value, selected },
+        ),
       monochrome: frequencyMap && $('color-off').checked,
       recent: mode === 'recent',
       rangeStart: mode === 'recent' ? frames[0]?.start || 0 : 0,
@@ -243,11 +285,13 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     text(
       'map-legend',
       $('color-mode').value === 'frequency'
-        ? relief
-          ? 'Relief = signed waveform · ' +
-            ($('color-off').checked ? 'color off' : 'color = strongest band')
-          : ($('color-off').checked ? 'Color off' : 'Color = strongest band') +
-            ' · white ring = sharp candidate'
+        ? fluid
+          ? 'Ripples = waveform · light = persistence · faint droplets = history'
+          : relief
+            ? 'Relief = signed waveform · ' +
+              ($('color-off').checked ? 'color off' : 'color = strongest band')
+            : ($('color-off').checked ? 'Color off' : 'Color = strongest band') +
+              ' · white ring = sharp candidate'
         : $('color-mode').value === 'change'
           ? 'Baseline Δ · blue = less · orange = more · full color = 12 dB'
           : 'Changed time · dark 0% → orange 100% · ≥6 dB',
@@ -280,7 +324,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     );
     text(
       'view-label',
-      `${source === 'demo' ? 'SYNTHETIC · ' : ''}${mode === 'recent' ? `${frames.length} retained windows · older → newer` : mode === 'side' ? (relief ? 'Representative 2-second windows' : '') : mode === 'history' ? 'Center = recent · outward = older' + (relief ? ' · example windows' : '') : relief ? 'Two-second waveform · ' + $('scale').value + ' µV ruler' : frequencyMap ? 'Two-second spectrum · ' + $('scale').value + ' µV ruler' : 'Two-second spectrum · fixed baseline'}${f.mixed ? ' · mixed settings' : ''}`,
+      `${source === 'demo' ? 'SYNTHETIC · ' : ''}${mode === 'recent' ? `${frames.length} retained windows · older → newer` : mode === 'side' ? (relief ? 'Representative 2-second windows' : '') : mode === 'history' ? 'Center = recent · outward = older' + (relief ? ' · example windows' : '') : fluid ? 'Ripple distance = recent time · ' + $('scale').value + ' µV ruler' : relief ? 'Two-second waveform · ' + $('scale').value + ' µV ruler' : frequencyMap ? 'Two-second spectrum · ' + $('scale').value + ' µV ruler' : 'Two-second spectrum · fixed baseline'}${f.mixed ? ' · mixed settings' : ''}`,
     );
     const old = $('channel').value,
       names = f.channels.map((c) => c.name);
@@ -941,7 +985,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
           .querySelectorAll('[data-view]')
           .forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
         if (mode === 'recent') {
-          $('surface-mode').value = 'relief';
+          if ($('surface-mode').value === 'spectrum') $('surface-mode').value = 'fluid';
           $('color-mode').value = 'frequency';
         }
         if (mode === 'side' || mode === 'recent') ensureField().side();
@@ -985,6 +1029,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     else render();
   };
   $('surface-mode').onchange = render;
+  $('pattern-kind').onchange = render;
   $('color-off').onchange = render;
   $('panel-details').onclick = () => {
     const open = root.classList.toggle('controls-open');
@@ -1020,7 +1065,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     paused = !paused;
     text('pause', paused ? 'Resume view' : 'Freeze view');
     $('pause').setAttribute('aria-pressed', String(paused));
-    if (!paused) render();
+    render();
   };
   $('setup-again').onclick = () => {
     suspend('Reviewing capture setup.');

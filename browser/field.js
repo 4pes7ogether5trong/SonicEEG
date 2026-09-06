@@ -14,6 +14,8 @@ import {
 } from './field-math.js';
 import { POSITIONS, parseDerivation } from './montage.js';
 import { reliefGeometry } from './waveform.js';
+import { WaterRenderer } from './water-renderer.js';
+import { waterChannels, waterAt } from './water-math.js';
 
 const vertex =
   'attribute float intensity; attribute float coverage; attribute float affected; varying float vI; varying float vC; varying float vA; varying vec3 vColor; varying vec3 vLocal; void main(){vI=intensity;vC=coverage;vA=affected;vColor=color;vLocal=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
@@ -29,9 +31,10 @@ const decrease = new THREE.Color('#409fff'),
 const fieldColor = (s) => (s.heat == null ? palette[s.band] : s.heat < 0 ? decrease : increase);
 
 export class FluidField {
-  constructor(container, onSelect, onStatus) {
+  constructor(container, onSelect, onStatus, onEpisode = () => {}) {
     this.container = container;
     this.onSelect = onSelect;
+    this.onEpisode = onEpisode;
     this.grid = scalpGrid(24, 40);
     this.meshes = [];
     this.glyphs = [];
@@ -71,6 +74,7 @@ export class FluidField {
       this.renderer.setClearColor('#060c14');
       this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       this.scene = new THREE.Scene();
+      this.water = new WaterRenderer(this.scene);
       this.scene.add(new THREE.AmbientLight(0xffffff, 0.65));
       const light = new THREE.DirectionalLight(0xffffff, 2.4);
       light.position.set(-3, 5, 4);
@@ -103,6 +107,13 @@ export class FluidField {
           ),
           this.camera,
         );
+        const droplet = this.raycaster.intersectObjects(
+          this.water.drops.filter((m) => m.visible),
+        )[0];
+        if (droplet) {
+          this.onEpisode(droplet.object.userData.episode);
+          return;
+        }
         const surfaceHit = this.raycaster.intersectObjects(
           this.reliefs.filter((m) => m.visible),
         )[0];
@@ -125,6 +136,7 @@ export class FluidField {
         last = now;
         if (document.hidden || this.visible === false) return;
         this.settle(dt);
+        this.water.animate(now);
         this.fly.enabled ? this.fly.update(dt) : this.controls.update();
         this.renderer.render(this.scene, this.camera);
       });
@@ -426,6 +438,15 @@ export class FluidField {
     }
     const o = this.options,
       shown = o.mode === 'live' ? this.frames.slice(-1) : this.frames;
+    if (o.fluid) {
+      for (const mesh of [...this.meshes, ...this.reliefs, ...this.glyphs]) mesh.visible = false;
+      this.water.update(shown, { ...o, animate: o.animate && !this.reduceMotion }, (f) =>
+        this.placement(f),
+      );
+      this.makeReference();
+      return;
+    }
+    this.water.hide();
     shown.forEach((frame, i) => {
       const mesh = this.getMesh(i),
         attrs = mesh.geometry.attributes,
@@ -569,8 +590,10 @@ export class FluidField {
   }
   softwareControls() {
     let down = null;
+    let origin = null;
     this.canvas.addEventListener('pointerdown', (e) => {
       down = [e.clientX, e.clientY];
+      origin = down.slice();
       this.canvas.setPointerCapture(e.pointerId);
     });
     this.canvas.addEventListener('pointermove', (e) => {
@@ -580,7 +603,16 @@ export class FluidField {
       down = [e.clientX, e.clientY];
       this.drawSoftware();
     });
-    this.canvas.addEventListener('pointerup', () => {
+    this.canvas.addEventListener('pointerup', (e) => {
+      if (origin && Math.hypot(e.clientX - origin[0], e.clientY - origin[1]) < 4) {
+        const r = this.canvas.getBoundingClientRect(),
+          x = ((e.clientX - r.left) * this.canvas.width) / r.width,
+          y = ((e.clientY - r.top) * this.canvas.height) / r.height;
+        const hit = (this.softwareDrops || []).find(
+          (d) => Math.hypot(x - d.x, y - d.y) <= d.radius + 5,
+        );
+        if (hit) this.onEpisode(hit.episode);
+      }
       down = null;
     });
     this.canvas.addEventListener('pointercancel', () => {
@@ -604,10 +636,22 @@ export class FluidField {
       o = this.options;
     ctx.fillStyle = '#060c14';
     ctx.fillRect(0, 0, w, h);
-    const grid = scalpGrid(16, 28),
+    this.softwareDrops = [];
+    const grid = o.fluid
+        ? scalpGrid(o.mode === 'live' ? 48 : 28, o.mode === 'live' ? 96 : 48)
+        : scalpGrid(16, 28),
       shown = o.mode === 'live' ? this.frames.slice(-1) : this.frames,
       tris = [],
       glyphs = [];
+    if (o.fluid) {
+      const top = grid.vertices[0][1];
+      for (const v of grid.vertices)
+        if (v[1] === top) {
+          v[0] = 0;
+          v[1] = 0.88;
+          v[2] = 0;
+        }
+    }
     const project = (v) => {
       const [x, y, z] = v,
         xx = x * Math.cos(this.yaw) + z * Math.sin(this.yaw),
@@ -620,6 +664,88 @@ export class FluidField {
     for (const f of shown) {
       const place = this.placement(f),
         weights = o.relief ? null : this.weightsFor(f, grid);
+      if (o.fluid) {
+        const cs = waterChannels(f, o.selected),
+          ds = o.dropletsFor(f);
+        const values = grid.vertices.map((v) =>
+          waterAt(normalize([v[0], v[1] / 0.88, v[2] / 1.12]), cs, o),
+        );
+        const positions = grid.vertices.map((v, i) => {
+          const p = normalize([v[0], v[1] / 0.88, v[2] / 1.12]),
+            n = normalize([p[0], p[1] / 0.88, p[2] / 1.12]);
+          let bulge = 0;
+          for (const d of ds.filter((d) => d.active).slice(0, 24)) {
+            const angle = Math.acos(
+              Math.max(
+                -1,
+                Math.min(
+                  1,
+                  p.reduce((s, x, k) => s + x * d.position[k], 0),
+                ),
+              ),
+            );
+            bulge += 0.075 * d.brightness * Math.exp((-angle * angle) / 0.035);
+          }
+          return v.map((x, j) => x * place.radial + n[j] * (values[i].height + bulge));
+        });
+        const pts = positions.map((v) =>
+          project(v.map((x, j) => x * place.scale + (j === 0 ? place.offset : 0))),
+        );
+        for (let i = 0; i < grid.indices.length; i += 3) {
+          const ids = grid.indices.slice(i, i + 3);
+          if (ids.some((j) => positions[j][0] > o.cut)) continue;
+          const [a, b, c] = ids.map((j) => positions[j]),
+            u = b.map((x, j) => x - a[j]),
+            v = c.map((x, j) => x - a[j]);
+          const n = normalize([
+              u[1] * v[2] - u[2] * v[1],
+              u[2] * v[0] - u[0] * v[2],
+              u[0] * v[1] - u[1] * v[0],
+            ]),
+            s = values[ids[0]];
+          tris.push({
+            p: ids.map((j) => pts[j]),
+            z: ids.reduce((s, j) => s + pts[j][2], 0),
+            relief: true,
+            amp:
+              (0.25 + 0.75 * Math.abs(-0.4 * n[0] + 0.7 * n[1] + 0.6 * n[2])) *
+              (0.2 + 0.8 * Math.min(1, s.coverage * 5)),
+            color: o.monochrome
+              ? new THREE.Color('#c5dced')
+              : palette[o.band >= 0 ? o.band : s.band],
+          });
+        }
+        for (const d of ds) {
+          const dp =
+            o.mode === 'live'
+              ? place
+              : this.placement({
+                  ...f,
+                  waveform: null,
+                  start: d.exampleStart ?? d.start,
+                  end: d.end,
+                });
+          const p = d.position,
+            base = [p[0], p[1] * 0.88, p[2] * 1.12];
+          if (base[0] * dp.radial > o.cut) continue;
+          const typeOffset = { sharp: -0.19, periodic: 0, rhythmic: 0.19 }[d.kind];
+          const point = project(
+            base.map(
+              (x, j) =>
+                (x * (dp.radial + 0.18) + (j === 0 ? typeOffset : 0)) * dp.scale +
+                (j === 0 ? dp.offset : 0),
+            ),
+          );
+          this.softwareDrops.push({
+            x: point[0],
+            y: point[1],
+            z: point[2],
+            radius: Math.max(3, Math.min(w / 6, h / 4) * this.zoom * 0.11 * dp.scale),
+            episode: d,
+          });
+        }
+        continue;
+      }
       const values = o.relief
         ? grid.vertices.map(() => ({}))
         : weights.map((v) => spectralField(v, f.channels, o));
@@ -701,6 +827,52 @@ export class FluidField {
         if (!t.relief) {
           ctx.globalAlpha = o.mode === 'history' ? 0.15 : 0.3;
           ctx.strokeStyle = '#08131d';
+          ctx.stroke();
+        }
+      });
+    ctx.globalAlpha = 1;
+    this.softwareDrops
+      .sort((a, b) => a.z - b.z)
+      .forEach((d) => {
+        const e = d.episode,
+          color = o.monochrome
+            ? new THREE.Color('#c5dced')
+            : palette[o.band >= 0 ? o.band : e.band || 0];
+        const gradient = ctx.createRadialGradient(
+          d.x - d.radius * 0.25,
+          d.y - d.radius * 0.4,
+          0,
+          d.x,
+          d.y,
+          d.radius,
+        );
+        gradient.addColorStop(0, '#e5f3ff');
+        gradient.addColorStop(
+          0.35,
+          color
+            .clone()
+            .multiplyScalar(0.3 + 0.7 * e.brightness)
+            .getStyle(),
+        );
+        gradient.addColorStop(1, '#09172a');
+        ctx.globalAlpha = e.opacity;
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.ellipse(
+          d.x,
+          d.y,
+          d.radius,
+          d.radius * (e.kind === 'sharp' ? 1.4 : 1.1),
+          0,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+        if (e.kind === 'periodic') {
+          ctx.strokeStyle = '#c5dced';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.ellipse(d.x, d.y, d.radius, d.radius * 0.3, 0, 0, Math.PI * 2);
           ctx.stroke();
         }
       });

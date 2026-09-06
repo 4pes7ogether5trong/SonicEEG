@@ -77,7 +77,13 @@ export function recentWaveforms(frames, focus, count = 6) {
   let before = Infinity;
   for (const w of snapshots)
     if (w.end <= before + 0.001) {
-      result.push({ start: w.start, end: w.end, channels: w.channels, waveform: w });
+      result.push({
+        start: w.start,
+        end: w.end,
+        channels: w.channels,
+        waveform: w,
+        droplets: w.droplets || [],
+      });
       before = w.start;
       if (result.length === count) break;
     }
