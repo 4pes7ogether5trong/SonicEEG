@@ -73,6 +73,9 @@ export const TRIALS = Object.freeze([
 export const TRIAL_DURATION = 30;
 // Preparing the exercise must NEVER undo the listener's level calibration.
 export function prepareExercise(mixer) {
+  // The fixed listening protocol uses a continuous reference without overwriting
+  // the user's patient profiles. Leaving the exercise restores their modes.
+  mixer.exerciseMode = true;
   mixer.configure({ focus: -1, spatial: 'maximum', band: -1, ambient: true });
   for (let slot = 0; slot < 4; slot++) mixer.patient(slot, { muted: false });
 }
@@ -80,6 +83,10 @@ export function listeningSettings(mixer) {
   return {
     master: mixer.volume,
     gains: Array.from({ length: 4 }, (_, slot) => mixer.live.slot(slot).gain),
+    patients: Array.from({ length: 4 }, (_, slot) => ({
+      octave: mixer.live.slot(slot).octave,
+      ...mixer.soundSettings(slot),
+    })),
     spatial: mixer.spatial,
     band: mixer.band,
     emphasis: mixer.ambient,
@@ -93,16 +100,13 @@ export function trialAudible(mixer, index) {
       mixer.context?.state === 'running' &&
       mixer.volume > 0 &&
       TRIALS[index].active.every(
-        (slot) =>
-          !mixer.live.slot(slot).muted && mixer.live.slot(slot).gain > 0,
+        (slot) => !mixer.live.slot(slot).muted && mixer.live.slot(slot).gain > 0,
       ),
   );
 }
 export function trialEvents(index) {
   const t = TRIALS[index];
-  return [
-    { ...t, slots: t.targets, start: 8, end: t.type === 'single' ? 8.8 : 24 },
-  ];
+  return [{ ...t, slots: t.targets, start: 8, end: t.type === 'single' ? 8.8 : 24 }];
 }
 export function scoreTrial(index, selected, elapsed) {
   const trial = TRIALS[index];

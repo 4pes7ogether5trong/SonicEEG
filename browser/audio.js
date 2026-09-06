@@ -5,16 +5,13 @@ import {
   FRESH_SECONDS,
   VOICE_PROFILES,
   outputCurve,
+  OCTAVES,
 } from './audio-mapping.js';
 import { PatternTracker } from './patterns.js';
 
 // Data clocks drive emphasis and accents; camera/UI clocks never do.
 export class PatientMixer {
-  constructor({
-    now,
-    contextFactory = () => new AudioContext(),
-    onState = () => {},
-  } = {}) {
+  constructor({ now, contextFactory = () => new AudioContext(), onState = () => {} } = {}) {
     this.live = new LiveAudioState(now);
     this.contextFactory = contextFactory;
     this.onState = onState;
@@ -24,6 +21,7 @@ export class PatientMixer {
     this.spatial = 'maximum';
     this.band = -1;
     this.ambient = true;
+    this.exerciseMode = false;
     this.voices = [];
     this.trackers = Array.from({ length: 4 }, () => new PatternTracker());
     this.notes = new Set();
@@ -62,7 +60,7 @@ export class PatientMixer {
         bus.gain.value = 0;
         filter.type = 'lowpass';
         filter.Q.value = 0.5;
-        filter.frequency.value = 650 * 2 ** slot;
+        filter.frequency.value = 650 * 2 ** (this.live.slot(slot).octave - 3);
         filter.connect(bus);
         bus.connect(this.master);
         const wave = this.wave(slot);
@@ -71,7 +69,7 @@ export class PatientMixer {
             gain = c.createGain(),
             pan = c.createStereoPanner();
           oscillator.setPeriodicWave(wave);
-          oscillator.frequency.value = carrier(slot, band);
+          oscillator.frequency.value = this.pitch(slot, band);
           gain.gain.value = 0;
           pan.pan.value = side * 0.65;
           oscillator.connect(gain);
@@ -84,33 +82,26 @@ export class PatientMixer {
         const accent = c.createOscillator(),
           accentGain = c.createGain();
         accent.setPeriodicWave(wave);
-        accent.frequency.value = carrier(slot, 2);
+        accent.frequency.value = this.pitch(slot, 2);
         accentGain.gain.value = 0;
         accent.connect(accentGain);
         accentGain.connect(filter);
         accent.start();
-        this.voices.push({ bus, filter, wave, voices, accentGain });
+        this.voices.push({ bus, filter, wave, voices, accent, accentGain });
       }
       c.onstatechange = () => this.onState(c.state);
     }
     await this.context.resume();
-    if (this.context.state !== 'running')
-      throw new Error('The browser has not started audio.');
+    if (this.context.state !== 'running') throw new Error('The browser has not started audio.');
     this.enabled = true;
-    this.master.gain.setTargetAtTime(
-      this.volume,
-      this.context.currentTime,
-      0.08,
-    );
+    this.master.gain.setTargetAtTime(this.volume, this.context.currentTime, 0.08);
     for (let i = 0; i < 4; i++) this.refresh(i);
     this.onState(this.context.state);
   }
   disable() {
     this.enabled = false;
-    for (let i = 0; i < 4; i++)
-      this.cancelNotes(i, ['data', 'status', 'reference']);
-    if (this.context)
-      this.master.gain.setTargetAtTime(0, this.context.currentTime, 0.04);
+    for (let i = 0; i < 4; i++) this.cancelNotes(i, ['data', 'status', 'reference']);
+    if (this.context) this.master.gain.setTargetAtTime(0, this.context.currentTime, 0.04);
   }
   begin(slot) {
     this.cancelNotes(slot, ['data', 'status', 'reference']);
@@ -148,10 +139,36 @@ export class PatientMixer {
       }
   }
   pinBaseline(slot) {
-    return (
-      this.live.status(slot) === 'live' &&
-      this.trackers[slot].pin(this.live.slot(slot).frame)
-    );
+    const pinned =
+      this.live.status(slot) === 'live' && this.trackers[slot].pin(this.live.slot(slot).frame);
+    if (pinned) {
+      this.cancelNotes(slot);
+      this.refresh(slot);
+    }
+    return pinned;
+  }
+  pitch(slot, band) {
+    return carrier(slot, band, this.live.slot(slot).octave);
+  }
+  soundSettings(slot) {
+    const s = this.live.slot(slot),
+      mode = this.exerciseMode ? 'continuous' : s.soundMode;
+    return {
+      mode,
+      threshold: this.exerciseMode
+        ? 0
+        : mode === 'changes'
+          ? s.changeThreshold
+          : s.amplitudeThreshold,
+    };
+  }
+  output(slot) {
+    return audioLevels(this.live.slot(slot).frame, {
+      spatial: this.spatial,
+      band: this.band,
+      ...this.soundSettings(slot),
+      baseline: this.trackers[slot].baseline,
+    });
   }
   ingest(slot, frame) {
     const before = this.live.status(slot),
@@ -167,17 +184,14 @@ export class PatientMixer {
     this.lossNotified[slot] = false;
     const features = this.trackers[slot].update(frame);
     this.refresh(slot);
-    if (this.ambient && this.enabled) {
-      for (const event of features.events.slice(0, 5)) {
-        const side =
-          event.sides.includes(-1) && event.sides.includes(1)
-            ? 0
-            : event.sides[0] || 0;
+    const output = this.output(slot);
+    if (this.ambient && this.enabled && output.audible) {
+      for (const event of features.events
+        .filter((e) => e.channels.some((n) => output.activeChannels.has(n)))
+        .slice(0, 5)) {
+        const side = event.sides.includes(-1) && event.sides.includes(1) ? 0 : event.sides[0] || 0;
         this.note(slot, {
-          level:
-            0.16 *
-            Math.min(1.5, event.amplitude / 80) *
-            (1 + features.emphasis),
+          level: 0.16 * Math.min(1.5, event.amplitude / 80) * (1 + features.emphasis),
           delay: Math.max(0, event.time - (frame.end - 0.65)),
           duration: 0.14 + 0.16 * event.afterwave,
           side,
@@ -222,10 +236,11 @@ export class PatientMixer {
     const s = this.live.slot(slot),
       now = this.context.currentTime,
       voice = this.voices[slot];
+    for (const v of voice.voices)
+      v.oscillator.frequency.setTargetAtTime(this.pitch(slot, v.band), now, 0.035);
+    voice.accent.frequency.setTargetAtTime(this.pitch(slot, 2), now, 0.035);
     voice.bus.gain.setTargetAtTime(
-      s.muted
-        ? 0
-        : s.gain * (this.focus >= 0 && this.focus !== slot ? 0.25 : 1),
+      s.muted ? 0 : s.gain * (this.focus >= 0 && this.focus !== slot ? 0.25 : 1),
       now,
       0.05,
     );
@@ -233,26 +248,17 @@ export class PatientMixer {
       this.silence(slot);
       return;
     }
-    const emphasis = this.ambient ? this.trackers[slot].value.emphasis : 0;
-    const remaining = Math.max(
-      0,
-      FRESH_SECONDS - (this.live.now() - s.received),
-    );
-    const { levels } = audioLevels(s.frame, this);
+    const output = this.output(slot);
+    const emphasis = this.ambient && output.audible ? this.trackers[slot].value.emphasis : 0;
+    if (!output.audible) this.cancelNotes(slot);
+    const remaining = Math.max(0, FRESH_SECONDS - (this.live.now() - s.received));
+    const { levels } = output;
     voice.voices.forEach((v, i) =>
-      this.envelope(
-        v.gain.gain,
-        levels[i].gain * (1 + 1.5 * emphasis),
-        remaining,
-      ),
+      this.envelope(v.gain.gain, levels[i].gain * (1 + 1.5 * emphasis), remaining),
     );
-    this.envelope(
-      voice.accentGain.gain,
-      this.ambient ? 0.06 * emphasis : 0,
-      remaining,
-    );
+    this.envelope(voice.accentGain.gain, this.ambient ? 0.06 * emphasis : 0, remaining);
     voice.filter.frequency.setTargetAtTime(
-      Math.min(16000, 650 * 2 ** slot * (1 + 2 * emphasis)),
+      Math.min(16000, 650 * 2 ** (s.octave - 3) * (1 + 2 * emphasis)),
       now,
       0.5,
     );
@@ -278,10 +284,21 @@ export class PatientMixer {
     if (!ambient) for (let i = 0; i < 4; i++) this.cancelNotes(i);
     for (let i = 0; i < 4; i++) this.refresh(i);
   }
-  patient(slot, { gain, muted } = {}) {
+  patient(slot, { gain, muted, octave, soundMode, amplitudeThreshold, changeThreshold } = {}) {
     const s = this.live.slot(slot);
     if (gain != null) s.gain = Math.max(0, Math.min(1.5, gain));
     if (muted != null) s.muted = Boolean(muted);
+    if (OCTAVES.includes(octave)) {
+      s.octave = octave;
+      this.cancelNotes(slot, ['data', 'reference', 'status']);
+    }
+    if (['continuous', 'changes'].includes(soundMode)) s.soundMode = soundMode;
+    if (Number.isFinite(amplitudeThreshold))
+      s.amplitudeThreshold = Math.max(0, Math.min(80, amplitudeThreshold));
+    if (Number.isFinite(changeThreshold))
+      s.changeThreshold = Math.max(1, Math.min(24, changeThreshold));
+    if (soundMode != null || amplitudeThreshold != null || changeThreshold != null)
+      this.cancelNotes(slot);
     this.refresh(slot);
   }
   note(
@@ -296,8 +313,7 @@ export class PatientMixer {
       kind = 'data',
     } = {},
   ) {
-    if (!this.enabled || !this.context || this.context.state !== 'running')
-      return;
+    if (!this.enabled || !this.context || this.context.state !== 'running') return;
     const c = this.context,
       oscillator = c.createOscillator(),
       gain = c.createGain(),
@@ -305,7 +321,7 @@ export class PatientMixer {
     const now = c.currentTime,
       start = now + delay;
     oscillator.setPeriodicWave(this.voices[slot].wave);
-    oscillator.frequency.value = frequency || carrier(slot, 2);
+    oscillator.frequency.value = frequency || this.pitch(slot, 2);
     gain.gain.value = 0;
     pan.pan.value = side * 0.65;
     gain.gain.setTargetAtTime(level, start, 0.008);
@@ -340,14 +356,14 @@ export class PatientMixer {
     this.note(slot, {
       level: 0.1,
       duration: 0.1,
-      frequency: carrier(slot, 3),
+      frequency: this.pitch(slot, 3),
       kind: 'status',
     });
     this.note(slot, {
       level: 0.1,
       duration: 0.1,
       delay: 0.28,
-      frequency: carrier(slot, 0),
+      frequency: this.pitch(slot, 0),
       kind: 'status',
     });
   }

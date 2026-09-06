@@ -539,6 +539,19 @@ dialog::backdrop {
 .patient-card output {
   min-width: 3ch;
 }
+.patient-sound-settings select {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+.patient-sound-settings output {
+  min-width: 5ch;
+  white-space: nowrap;
+}
+.patient-sound-settings .sound-hint {
+  font-size: 0.8125rem;
+  margin: 0.4rem 0;
+}
 .patient-levels {
   display: flex;
   gap: 4px;

@@ -483,12 +483,24 @@
           not detected events.
         </p>
         <p>
-          Each patient keeps the same octave: A uses C3–A3, B C4–A4, C C5–A5 and D C6–A6. Within
-          each octave, delta, theta, alpha, beta and gamma use C, D, E, G and A. Their loudness
-          follows band RMS on a shared voltage scale. Velvet, Hollow, Reed and Glass give the
-          patients different harmonic textures. Pitch identifies patient and band; it is not a
-          direct frequency readout. Mono phone speakers cannot convey left/right stereo location,
-          and comfortable device levels still need checking.
+          Adjust each patient's octave (2–6), sound mode, threshold and volume independently.
+          Defaults are A C3–A3, B C4–A4, C C5–A5 and D C6–A6. Within each octave, delta, theta,
+          alpha, beta and gamma use C, D, E, G and A. Their loudness follows band RMS on a shared
+          voltage scale. Velvet, Hollow, Reed and Glass give the patients different harmonic
+          textures. Pitch identifies patient and band; it is not a direct frequency readout. Mono
+          phone speakers cannot convey left/right stereo location, and comfortable device levels
+          still need checking.
+        </p>
+        <p>
+          Continuous plays band activity above the chosen band-RMS threshold; 0 µV includes the
+          measured background. Changes only stays quiet until you pin a baseline and a band changes
+          beyond your dB threshold. Both increases and attenuation can sound. Lower thresholds
+          reveal smaller changes; Volume adjusts loudness separately. Thresholds also gate accents
+          and the held emphasis tone, so they cannot sustain a background hum inside the quiet
+          range. Sound fades smoothly as activity returns. The octave and thresholds stay set when
+          capture restarts; the baseline must be pinned again for a new source or recording context.
+          These settings last for this tab. This is a band-based rendition of EEG, not playback of
+          every waveform cycle. Changes with unchanged band power can remain quiet in Changes only.
         </p>
         <p>
           Persistence emphasis increases more strongly after ten seconds of observed sustained
@@ -530,8 +542,10 @@
           sustained left activity in A, bilateral activity in B and C, and brief recurring then
           sustained right activity in D. The known quiet interval is pinned automatically only for
           synthetic data. Programmed labels are hidden during the listening exercise. The exercise
-          preserves your output levels and does not score an unheard or interrupted clip. Audio gain
-          has increased: begin with low device volume, especially with headphones.
+          preserves your volume and octave choices and does not score an unheard or interrupted
+          clip. During the exercise, continuous sound at 0 µV temporarily replaces each patient's
+          mode and threshold; your settings resume when you close it. Audio gain has increased:
+          begin with low device volume, especially with headphones.
         </p>
         <p>
           Use the same desktop browser tab for this prototype and keep it active. Browser capture or

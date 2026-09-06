@@ -12,19 +12,13 @@ export function persistenceEmphasis(seconds, recurrence) {
 }
 const median = (values) => {
   const a = [...values].sort((x, y) => x - y);
-  return a.length
-    ? (a[Math.floor((a.length - 1) / 2)] + a[Math.floor(a.length / 2)]) / 2
-    : 0;
+  return a.length ? (a[Math.floor((a.length - 1) / 2)] + a[Math.floor(a.length / 2)]) / 2 : 0;
 };
 
 // Engineering descriptors, NOT a spike/PD/seizure classifier. The displayed
 // waveform must supply enough samples; filtering and artifacts remain limits.
 export function transientFeatures(samples, rate, start) {
-  if (
-    rate < 100 ||
-    samples.length < rate * 0.5 ||
-    !samples.every(Number.isFinite)
-  )
+  if (rate < 100 || samples.length < rate * 0.5 || !samples.every(Number.isFinite))
     return { available: false, events: [] };
   const center = median(samples),
     x = Array.from(samples, (v) => v - center);
@@ -34,8 +28,7 @@ export function transientFeatures(samples, rate, start) {
     events = [];
   for (let i = radius; i < x.length - radius; i++) {
     const a = Math.abs(x[i]);
-    if (a < threshold || a < Math.abs(x[i - 1]) || a <= Math.abs(x[i + 1]))
-      continue;
+    if (a < threshold || a < Math.abs(x[i - 1]) || a <= Math.abs(x[i + 1])) continue;
     let left = i,
       right = i;
     while (
@@ -54,8 +47,7 @@ export function transientFeatures(samples, rate, start) {
     if (
       width < 0.012 ||
       width > 0.09 ||
-      Math.abs(x[i - curvatureStep] - 2 * x[i] + x[i + curvatureStep]) <
-        a * 0.75
+      Math.abs(x[i - curvatureStep] - 2 * x[i] + x[i + curvatureStep]) < a * 0.75
     )
       continue;
     const time = start + i / rate;
@@ -100,14 +92,10 @@ export class PatternTracker {
     };
   }
   pin(frame) {
-    const valid = frame?.channels?.filter(
-      (c) => c.valid && c.status === 'observed',
-    );
+    const valid = frame?.channels?.filter((c) => c.valid && c.status === 'observed');
     if (!valid?.length || frame.mixed) return false;
-    this.baseline = new Map(
-      valid.map((c) => [c.name, c.bands.map((p) => Math.sqrt(p))]),
-    );
-    this.baselineContext = JSON.stringify([frame.segment, frame.settings]);
+    this.baseline = new Map(valid.map((c) => [c.name, c.bands.map((p) => Math.sqrt(p))]));
+    this.baselineContext = JSON.stringify([frame.source, frame.segment, frame.settings]);
     this.value.baseline = true;
     this.value.deviation = 0;
     this.value.changed = false;
@@ -115,18 +103,12 @@ export class PatternTracker {
     return true;
   }
   update(frame) {
-    if (
-      !Number.isFinite(frame?.end) ||
-      frame.end <= (this.lastEnd ?? -Infinity)
-    )
-      return this.value;
-    const context = JSON.stringify([frame.segment, frame.settings]);
+    if (!Number.isFinite(frame?.end) || frame.end <= (this.lastEnd ?? -Infinity)) return this.value;
+    const context = JSON.stringify([frame.source, frame.segment, frame.settings]);
     // A gap may clear the temporal context, but never makes a reference from
     // another montage/filter/scale segment comparable to the new recording.
     if (this.baseline && this.baselineContext !== context) this.reset();
-    const rows = frame.channels.filter(
-      (c) => c.valid && c.status === 'observed',
-    );
+    const rows = frame.channels.filter((c) => c.valid && c.status === 'observed');
     if (frame.mixed || !rows.length) {
       this.reset({ keepBaseline: true });
       return this.value;
@@ -151,10 +133,7 @@ export class PatternTracker {
       for (const e of c.transients?.events || []) {
         if (e.time <= prior + 0.035 || e.time < frame.end - 2.1) continue;
         fresh.push({ ...e, name: c.name, side });
-        this.seen.set(
-          c.name,
-          Math.max(this.seen.get(c.name) ?? -Infinity, e.time),
-        );
+        this.seen.set(c.name, Math.max(this.seen.get(c.name) ?? -Infinity, e.time));
       }
       const base = this.baseline?.get(c.name);
       if (base)
@@ -163,10 +142,7 @@ export class PatternTracker {
           // a fixed 2 µV floor. The reference NEVER rolls toward a new pattern.
           deviation = Math.max(
             deviation,
-            clamp(
-              (Math.abs(Math.log2((Math.sqrt(p) + 2) / (base[i] + 2))) - 0.65) /
-                1.5,
-            ),
+            clamp((Math.abs(Math.log2((Math.sqrt(p) + 2) / (base[i] + 2))) - 0.65) / 1.5),
           );
         });
     }
@@ -192,45 +168,34 @@ export class PatternTracker {
         sequence = this.recent.slice(i);
         this.sequenceOnset = null;
       }
-    const intervals = sequence
-      .slice(1)
-      .map((e, i) => e.time - sequence[i].time);
+    const intervals = sequence.slice(1).map((e, i) => e.time - sequence[i].time);
     const interval = median(intervals);
     const regularity =
       intervals.length >= 2
         ? clamp(
             1 -
-              (median(intervals.map((x) => Math.abs(x - interval))) /
-                Math.max(0.02, interval)) *
-                2,
+              (median(intervals.map((x) => Math.abs(x - interval))) / Math.max(0.02, interval)) * 2,
           )
         : 0;
     const repeated =
       sequence.length >= 3 &&
-      frame.end - sequence.at(-1).time <
-        Math.min(3, Math.max(1.2, interval * 1.8));
+      frame.end - sequence.at(-1).time < Math.min(3, Math.max(1.2, interval * 1.8));
     if (repeated) this.sequenceOnset ??= sequence[0].time;
-    const sharpSeconds = repeated
-      ? Math.max(0, sequence.at(-1).time - this.sequenceOnset)
-      : 0;
+    const sharpSeconds = repeated ? Math.max(0, sequence.at(-1).time - this.sequenceOnset) : 0;
     if (!repeated) this.sequenceOnset = null;
     // An expired train cannot be joined to a later burst merely because its
     // old candidates are still in the short history. Recurrence remains separate.
     if (sequence.length >= 3 && !repeated) this.recent = [];
     if (deviation > 0.35) this.deviationOnset ??= frame.start;
     else this.deviationOnset = null;
-    const deviationSeconds =
-      this.deviationOnset == null ? 0 : frame.end - this.deviationOnset;
+    const deviationSeconds = this.deviationOnset == null ? 0 : frame.end - this.deviationOnset;
     const ongoing = repeated || deviation > 0.35;
     this.run = Math.max(sharpSeconds, deviationSeconds);
     const target = ongoing || events.length ? 1 : 0;
-    this.memory +=
-      (target - this.memory) * (1 - Math.exp(-dt / (target ? 10 : 18)));
+    this.memory += (target - this.memory) * (1 - Math.exp(-dt / (target ? 10 : 18)));
     const desired = persistenceEmphasis(this.run, this.memory);
     const emphasis =
-      desired > this.value.emphasis
-        ? desired
-        : this.value.emphasis * Math.exp(-dt / 6);
+      desired > this.value.emphasis ? desired : this.value.emphasis * Math.exp(-dt / 6);
     const sides = new Set(
       this.recent.filter((e) => frame.end - e.time < 3).flatMap((e) => e.sides),
     );

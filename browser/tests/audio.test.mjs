@@ -63,10 +63,7 @@ test('Audio keeps amplitude differences and focal contributions without per-pati
   assert.equal(audioLevels(f).levels[0].rms, 40);
   assert.ok(audioLevels(f, { spatial: 'mean' }).levels[0].rms < 14);
   assert.equal(audioLevels(f).levels[1].rms, 0);
-  assert.equal(
-    audioLevels({ channels: [channel('F7-T7', 10, 'expected')] }).valid,
-    false,
-  );
+  assert.equal(audioLevels({ channels: [channel('F7-T7', 10, 'expected')] }).valid, false);
   assert.equal(
     audioLevels(frame(1, 0)).valid,
     true,
@@ -96,10 +93,7 @@ test('Old intervals and view-style reads cannot refresh a stale patient or reviv
   assert.equal(state.status(2), 'live');
   state.begin(1);
   assert.equal(state.status(1), 'waiting');
-  assert.ok(
-    state.ingest(1, frame(0.5)),
-    'a new source may start its own timeline',
-  );
+  assert.ok(state.ingest(1, frame(0.5)), 'a new source may start its own timeline');
   assert.throws(() => state.begin(4), RangeError);
 });
 
@@ -120,15 +114,7 @@ class Param {
 }
 class AudioNode {
   constructor() {
-    for (const key of [
-      'gain',
-      'frequency',
-      'pan',
-      'threshold',
-      'knee',
-      'ratio',
-      'Q',
-    ])
+    for (const key of ['gain', 'frequency', 'pan', 'threshold', 'knee', 'ratio', 'Q'])
       this[key] = new Param();
   }
   connect() {}
@@ -181,18 +167,13 @@ test('Audio-clock expiry, per-patient mute/focus and data-loss isolation do not 
     mixer.ingest(slot, frame(2, 20));
   }
   const deadline = () =>
-    mixer.voices[0].voices[0].gain.gain.events.findLast(
-      (e) => e.type === 'target' && e.value === 0,
-    ).time;
+    mixer.voices[0].voices[0].gain.gain.events.findLast((e) => e.type === 'target' && e.value === 0)
+      .time;
   assert.equal(deadline(), FRESH_SECONDS);
   context.currentTime = 1;
   mixer.patient(0, { gain: 0.5, muted: true });
   assert.equal(mixer.voices[0].bus.gain.events.at(-1).value, 0);
-  assert.equal(
-    deadline(),
-    FRESH_SECONDS,
-    'mute changes must not postpone stale expiry',
-  );
+  assert.equal(deadline(), FRESH_SECONDS, 'mute changes must not postpone stale expiry');
   mixer.patient(0, { muted: false });
   mixer.configure({ focus: 2 });
   assert.equal(mixer.voices[1].bus.gain.events.at(-1).value, 0.25);
@@ -222,13 +203,12 @@ test('Comfort settings survive exercise preparation; zero-level or interrupted s
     mixer = new PatientMixer({ contextFactory: () => context });
   await mixer.enable();
   mixer.configure({ volume: 0.72, band: 3, focus: 2, ambient: false });
-  [1.3, 0.8, 1.5, 1.1].forEach((gain, slot) =>
-    mixer.patient(slot, { gain, muted: true }),
-  );
+  [1.3, 0.8, 1.5, 1.1].forEach((gain, slot) => mixer.patient(slot, { gain, muted: true }));
   prepareExercise(mixer);
   assert.deepEqual(listeningSettings(mixer), {
     master: 0.72,
     gains: [1.3, 0.8, 1.5, 1.1],
+    patients: [3, 4, 5, 6].map((octave) => ({ octave, mode: 'continuous', threshold: 0 })),
     spatial: 'maximum',
     band: -1,
     emphasis: true,
@@ -246,11 +226,120 @@ test('Comfort settings survive exercise preparation; zero-level or interrupted s
   assert.equal(trialAudible(mixer, TRIALS.length), false);
 });
 
-test('All four timbres differ, calibrated gain is higher, and the digital output transfer stays bounded', () => {
+test('Independent octaves retune patient voices and cues while retaining the shared scale and freshness deadline', async () => {
+  const context = new AudioContextDouble(),
+    mixer = new PatientMixer({ now: () => context.currentTime, contextFactory: () => context });
+  mixer.patient(0, { octave: 5 });
+  await mixer.enable();
+  for (let slot = 0; slot < 2; slot++) {
+    mixer.begin(slot);
+    mixer.ingest(slot, frame(2, 20));
+  }
+  assert.equal(mixer.voices[0].voices[0].oscillator.frequency.value, carrier(0, 0, 5));
+  context.currentTime = 1;
+  mixer.patient(0, { octave: 2 });
+  assert.equal(mixer.live.slot(1).octave, 4);
+  for (const v of mixer.voices[0].voices)
+    assert.equal(v.oscillator.frequency.events.at(-1).value, carrier(0, v.band, 2));
+  assert.equal(mixer.voices[0].accent.frequency.events.at(-1).value, carrier(0, 2, 2));
   assert.equal(
-    new Set(VOICE_PROFILES.map((v) => v.partials.join(','))).size,
-    4,
+    mixer.voices[0].voices[0].gain.gain.events.findLast((e) => e.type === 'target' && e.value === 0)
+      .time,
+    FRESH_SECONDS,
   );
+  mixer.identify(0);
+  assert.equal([...mixer.notes].at(-1).oscillator.frequency.value, carrier(0, 2, 2));
+  mixer.lossCue(0);
+  assert.deepEqual(
+    [...mixer.notes].filter((n) => n.kind === 'status').map((n) => n.oscillator.frequency.value),
+    [carrier(0, 3, 2), carrier(0, 0, 2)],
+  );
+  assert.equal(carrier(0, 2, 4), carrier(3, 2, 4));
+  assert.throws(() => carrier(0, 0, 7), RangeError);
+});
+
+test('Thresholds gate baseline sound per channel and changes-only responds to attenuation without a background hum', async () => {
+  const context = new AudioContextDouble(),
+    mixer = new PatientMixer({ contextFactory: () => context });
+  await mixer.enable();
+  mixer.begin(0);
+  mixer.begin(1);
+  mixer.patient(0, { soundMode: 'changes', changeThreshold: 6 });
+  mixer.ingest(0, frame(2, 20));
+  mixer.ingest(1, frame(2, 20));
+  assert.equal(mixer.output(0).baselineReady, false);
+  assert.equal(mixer.output(0).audible, false);
+  assert.equal(mixer.output(1).audible, true);
+  assert.ok(mixer.pinBaseline(0));
+  assert.equal(mixer.output(0).audible, false);
+  mixer.ingest(0, frame(2.5, 21));
+  assert.equal(mixer.output(0).audible, false);
+  mixer.trackers[0].value.emphasis = 1;
+  mixer.refresh(0);
+  assert.equal(mixer.voices[0].accentGain.gain.events.find((e) => e.type === 'target').value, 0);
+  assert.ok(![...mixer.notes].some((n) => n.slot === 0 && n.kind === 'data'));
+  mixer.ingest(0, frame(3, 50));
+  assert.equal(mixer.output(0).audible, true);
+  mixer.ingest(0, frame(3.5, 0));
+  assert.equal(mixer.output(0).audible, true, 'valid attenuation creates a difference tone');
+  mixer.ingest(0, frame(4, 20));
+  assert.equal(mixer.output(0).audible, false);
+  assert.ok(![...mixer.notes].some((n) => n.slot === 0 && n.kind === 'data'));
+  const newContext = { ...frame(4.5, 50), source: 'another' };
+  mixer.ingest(0, newContext);
+  assert.equal(mixer.output(0).baselineReady, false);
+  assert.equal(mixer.output(0).audible, false);
+  mixer.patient(1, { amplitudeThreshold: 25 });
+  assert.equal(mixer.output(1).audible, false);
+  mixer.patient(1, { amplitudeThreshold: 0, gain: 0.5 });
+  assert.equal(mixer.output(1).audible, true);
+  assert.equal(mixer.output(0).audible, false);
+});
+
+test('A focal change survives hemisphere pooling; unobserved or unmatched channels cannot trigger change sound', () => {
+  const baseline = new Map([
+    ['F7-T7', Array(5).fill(10)],
+    ['F3-C3', Array(5).fill(40)],
+  ]);
+  const f = {
+    channels: [
+      channel('F7-T7', 40),
+      channel('F3-C3', 40),
+      channel('F8-T8', 100),
+      channel('FP1-T7', 100, 'derived'),
+    ],
+  };
+  const output = audioLevels(f, { mode: 'changes', threshold: 6, baseline });
+  assert.ok(output.audible);
+  assert.deepEqual([...output.activeChannels], ['F7-T7']);
+  assert.equal(output.levels[1].gain, 0);
+  const quiet = audioLevels(f, { mode: 'changes', threshold: 24, baseline });
+  assert.equal(quiet.audible, false);
+  assert.ok(audioLevels(f, { mode: 'changes', threshold: 6, baseline, spatial: 'mean' }).audible);
+});
+
+test('Patient sound choices survive source restarts and the fixed listening exercise', () => {
+  const mixer = new PatientMixer();
+  mixer.patient(2, { octave: 3, soundMode: 'changes', changeThreshold: 12, amplitudeThreshold: 8 });
+  mixer.begin(2);
+  mixer.stop(2);
+  mixer.begin(2);
+  const s = mixer.live.slot(2);
+  assert.deepEqual(
+    [s.octave, s.soundMode, s.changeThreshold, s.amplitudeThreshold],
+    [3, 'changes', 12, 8],
+  );
+  prepareExercise(mixer);
+  assert.deepEqual(mixer.soundSettings(2), { mode: 'continuous', threshold: 0 });
+  assert.equal(s.octave, 3);
+  mixer.exerciseMode = false;
+  assert.deepEqual(mixer.soundSettings(2), { mode: 'changes', threshold: 12 });
+  mixer.patient(2, { soundMode: 'continuous' });
+  assert.deepEqual(mixer.soundSettings(2), { mode: 'continuous', threshold: 8 });
+});
+
+test('All four timbres differ, calibrated gain is higher, and the digital output transfer stays bounded', () => {
+  assert.equal(new Set(VOICE_PROFILES.map((v) => v.partials.join(','))).size, 4);
   assert.equal(audioLevels(frame(1, 40)).levels[0].gain, 0.1);
   assert.equal(audioLevels(frame(1, 400)).levels[0].gain, 0.2);
   for (let i = -1000; i <= 1000; i++) {
@@ -282,8 +371,7 @@ test('Measured synthetic transients schedule accents, persistence grows, and gap
     values.push({ end: f.end, ...mixer.trackers[0].value });
     // Model natural oscillator completion so the double does not retain old notes.
     for (const n of [...mixer.notes])
-      if (n.gain.gain.events.at(-1).time < context.currentTime)
-        n.oscillator.onended();
+      if (n.gain.gain.events.at(-1).time < context.currentTime) n.oscillator.onended();
   });
   for (let start = 0; start < 40; start += 0.5) {
     context.currentTime = start + 0.5;
@@ -308,23 +396,13 @@ test('Measured synthetic transients schedule accents, persistence grows, and gap
     accents.at(-1).level > accents[1].level,
     'same programmed amplitude grows more prominent with persistence',
   );
-  assert.ok(
-    values.find((v) => v.end === 30).emphasis >
-      values.find((v) => v.end === 20).emphasis,
-  );
+  assert.ok(values.find((v) => v.end === 30).emphasis > values.find((v) => v.end === 20).emphasis);
   mixer.unavailable(0);
   assert.equal(mixer.trackers[0].value.emphasis, 0);
   assert.ok(![...mixer.notes].some((n) => n.slot === 0 && n.kind === 'data'));
-  assert.equal(
-    [...mixer.notes].filter((n) => n.slot === 0 && n.kind === 'status').length,
-    2,
-  );
+  assert.equal([...mixer.notes].filter((n) => n.slot === 0 && n.kind === 'status').length, 2);
   assert.equal(mixer.live.status(1), 'live');
-  assert.ok(
-    mixer.voices[1].voices.some((v) =>
-      v.gain.gain.events.some((e) => e.value > 0),
-    ),
-  );
+  assert.ok(mixer.voices[1].voices.some((v) => v.gain.gain.events.some((e) => e.value > 0)));
   mixer.poll();
   mixer.unavailable(0);
   assert.equal(
@@ -340,11 +418,7 @@ test('Measured synthetic transients schedule accents, persistence grows, and gap
   mixer.identify(0);
   assert.ok([...mixer.notes].some((n) => n.kind === 'reference'));
   mixer.configure({ ambient: false });
-  assert.equal(
-    mixer.voices[0].accentGain.gain.events.find((e) => e.type === 'target')
-      .value,
-    0,
-  );
+  assert.equal(mixer.voices[0].accentGain.gain.events.find((e) => e.type === 'target').value, 0);
   mixer.stop(0);
   assert.ok(![...mixer.notes].some((n) => n.slot === 0));
 });
@@ -379,9 +453,7 @@ test('Four-stream synthetic pipeline produces only the programmed patient and ba
           channels: patientDemoBlock(start, 0.5, 128, {
             slot,
             seed: 106,
-            changes: [
-              { start: 8, end: 14, slots: spec.targets, band: spec.band },
-            ],
+            changes: [{ start: 8, end: 14, slots: spec.targets, band: spec.band }],
           }),
         },
         {

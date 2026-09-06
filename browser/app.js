@@ -1,6 +1,6 @@
 import { mountPatient } from './patient-panel.js';
 import { PatientMixer } from './audio.js';
-import { PATIENTS, VOICE_PROFILES, audioLevels } from './audio-mapping.js';
+import { PATIENTS, VOICE_PROFILES, OCTAVES, audioLevels } from './audio-mapping.js';
 import { BANDS } from './signal.js';
 import {
   TRIALS,
@@ -51,13 +51,32 @@ for (const [slot, name] of PATIENTS.entries()) {
   card.innerHTML =
     '<button data-action="view" aria-pressed="false"><b>Patient ' +
     name +
-    '</b><span>Octave ' +
+    '</b><span data-role="voice-label">Octave ' +
     (slot + 3) +
     ' · ' +
     VOICE_PROFILES[slot].name +
-    '</span></button><div class="patient-source">No source</div><div class="patient-state">Not started</div><div class="patient-levels" aria-hidden="true"></div><div class="pattern-state"></div><div class="script-state"></div><div class="actions"><button data-action="mute" aria-pressed="false">Mute</button><button data-action="focus" aria-pressed="false">Focus</button><button data-action="identify">Test voice</button></div><details><summary>Adjust</summary><button data-action="baseline">Pin baseline</button><label>Gain <input type="range" min="0" max="150" value="100" aria-label="Patient ' +
+    '</span></button><div class="patient-source">No source</div><div class="patient-state">Not started</div><div class="patient-levels" aria-hidden="true"></div><div class="pattern-state"></div><div class="script-state"></div><div class="actions"><button data-action="mute" aria-pressed="false">Mute</button><button data-action="focus" aria-pressed="false">Focus</button><button data-action="identify">Test voice</button></div><details><summary>Adjust</summary><div class="patient-sound-settings"><label>Octave<select data-setting="octave" aria-label="Patient ' +
     name +
-    ' gain"><output>1.0×</output></label></details>';
+    ' octave">' +
+    OCTAVES.map(
+      (o) =>
+        '<option value="' +
+        o +
+        '"' +
+        (o === slot + 3 ? ' selected' : '') +
+        '>C' +
+        o +
+        '–A' +
+        o +
+        '</option>',
+    ).join('') +
+    '</select></label><label>Play<select data-setting="mode" aria-label="Patient ' +
+    name +
+    ' sound mode"><option value="continuous">Continuous</option><option value="changes">Changes only</option></select></label><label><span data-role="threshold-label">Band threshold</span><input data-setting="threshold" type="range" min="0" max="80" step="1" value="0" aria-label="Patient ' +
+    name +
+    ' sound threshold"><output data-role="threshold-value">0 µV</output></label><div class="muted sound-hint" data-role="sound-hint">0 µV includes the measured background.</div><button data-action="baseline">Pin baseline</button><label>Volume <input data-setting="gain" type="range" min="0" max="150" value="100" aria-label="Patient ' +
+    name +
+    ' volume"><output data-role="gain-value">1.0×</output></label></div></details>';
   for (const band of BANDS) {
     const bar = document.createElement('i');
     bar.style.background = band.color;
@@ -125,8 +144,22 @@ for (const [slot, name] of PATIENTS.entries()) {
     );
     refreshCards();
   };
-  card.querySelector('input').oninput = (event) => {
+  card.querySelector('[data-setting="gain"]').oninput = (event) => {
     mixer.patient(slot, { gain: Number(event.target.value) / 100 });
+    refreshCards();
+  };
+  card.querySelector('[data-setting="octave"]').onchange = (event) => {
+    mixer.patient(slot, { octave: Number(event.target.value) });
+    refreshCards();
+  };
+  card.querySelector('[data-setting="mode"]').onchange = (event) => {
+    mixer.patient(slot, { soundMode: event.target.value });
+    refreshCards();
+  };
+  card.querySelector('[data-setting="threshold"]').oninput = (event) => {
+    const key =
+      mixer.live.slot(slot).soundMode === 'changes' ? 'changeThreshold' : 'amplitudeThreshold';
+    mixer.patient(slot, { [key]: Number(event.target.value) });
     refreshCards();
   };
 }
@@ -167,6 +200,24 @@ function refreshCards() {
     const s = mixer.live.slot(slot),
       state = mixer.live.status(slot),
       metadata = states[slot];
+    const output = mixer.output(slot),
+      changes = s.soundMode === 'changes';
+    card.querySelector('[data-role="voice-label"]').textContent =
+      'Octave ' + s.octave + ' · ' + VOICE_PROFILES[slot].name;
+    card.querySelector('[data-setting="octave"]').value = String(s.octave);
+    card.querySelector('[data-setting="mode"]').value = s.soundMode;
+    const thresholdInput = card.querySelector('[data-setting="threshold"]');
+    thresholdInput.min = changes ? '1' : '0';
+    thresholdInput.max = changes ? '24' : '80';
+    thresholdInput.value = String(changes ? s.changeThreshold : s.amplitudeThreshold);
+    card.querySelector('[data-role="threshold-label"]').textContent = changes
+      ? 'Change threshold'
+      : 'Band threshold';
+    card.querySelector('[data-role="threshold-value"]').textContent =
+      thresholdInput.value + (changes ? ' dB' : ' µV');
+    card.querySelector('[data-role="sound-hint"]').textContent = changes
+      ? 'Lower = smaller changes audible. Pin baseline while data is live.'
+      : 'Lower = more background audible. 0 µV includes all measured bands.';
     card.classList.toggle('selected', slot === selected);
     card.dataset.state = state;
     card
@@ -196,9 +247,15 @@ function refreshCards() {
             ? 'Master volume is zero'
             : !s.gain
               ? 'Patient volume is zero'
-              : audioLevels(s.frame, mixer).levels.some((l) => l.gain > 0)
-                ? 'Playing EEG'
-                : 'Signal received · selected bands quiet'
+              : !output.baselineReady
+                ? 'Changes only · pin baseline to hear changes'
+                : output.audible
+                  ? mixer.soundSettings(slot).mode === 'changes'
+                    ? 'Playing baseline change'
+                    : 'Playing EEG'
+                  : mixer.soundSettings(slot).mode === 'changes'
+                    ? 'Quiet · within baseline threshold'
+                    : 'Quiet · below sound threshold'
         : labels[state] || state) +
       (s.muted
         ? ' · MUTED'
@@ -212,7 +269,7 @@ function refreshCards() {
       .setAttribute('aria-pressed', String(mixer.focus === slot));
     card.querySelector('[data-action="identify"]').disabled = inExercise;
     card.querySelector('[data-action="baseline"]').disabled = inExercise || state !== 'live';
-    card.querySelector('output').textContent = s.gain.toFixed(1) + '×';
+    card.querySelector('[data-role="gain-value"]').textContent = s.gain.toFixed(1) + '×';
     const pattern = mixer.trackers[slot].value;
     card.querySelector('.pattern-state').textContent =
       state === 'live' && pattern.persistence > 0
@@ -334,8 +391,19 @@ $('stop-all').onclick = () => {
 function exerciseControls() {
   for (const id of ['audio-spatial', 'audio-band', 'ambient']) $(id).disabled = inExercise;
   cards.forEach((card) => {
-    for (const selector of ['[data-action="mute"]', '[data-action="focus"]', 'input'])
-      card.querySelector(selector).disabled = inExercise && (trialRunning || selector !== 'input');
+    for (const selector of [
+      '[data-action="mute"]',
+      '[data-action="focus"]',
+      '[data-setting="gain"]',
+    ])
+      card.querySelector(selector).disabled =
+        inExercise && (trialRunning || selector !== '[data-setting="gain"]');
+    for (const selector of [
+      '[data-setting="octave"]',
+      '[data-setting="mode"]',
+      '[data-setting="threshold"]',
+    ])
+      card.querySelector(selector).disabled = inExercise;
   });
   panels.forEach((p) => p.lock(inExercise));
   $('sound-check').disabled = trialRunning || practiceRunning;
@@ -379,6 +447,7 @@ $('exercise-close').onclick = () => {
   trialRunning = trialPlaying = false;
   stopSources();
   inExercise = false;
+  mixer.exerciseMode = false;
   $('trial-answers').disabled = true;
   $('exercise').hidden = true;
   document.body.classList.remove('exercise-active');
@@ -420,7 +489,7 @@ $('sound-check').onclick = async () => {
             ' · ' +
             VOICE_PROFILES[slot].name +
             ' · octave ' +
-            (slot + 3) +
+            mixer.live.slot(slot).octave +
             ' (reference voice)';
         }, slot * 1800),
       );
