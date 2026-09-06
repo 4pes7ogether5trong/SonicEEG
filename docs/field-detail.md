@@ -1,0 +1,13 @@
+# Frequency detail and four-patient layout
+
+The previous renderer stacked five translucent shells separated by only 0.032 head radii, obscuring concurrent activity. The revised renderer uses one contoured, depth-tested surface per time slice. Its color follows the strongest interpolated band, or the selected band. It does not claim greater spatial resolution than the montage supplies.
+
+Each channel has five separate colored radial bars. Their lengths and brightness use the existing band-RMS amplitude mapping and shared ruler, preserving secondary frequency components even when another band dominates the surface. Unavailable channels have hollow gray markers and contribute no amplitude. White rings mark experimental sharp-shape candidates, which can include artifacts; these are not diagnosis labels. The software renderer also shows all five channel bands, replacing its previous global single-band fallback.
+
+Sharp-candidate counts are deduplicated across overlapping analysis windows, reset at pipeline boundaries and retained by time-bin merging. They count observed candidates, with window-dependent latency; they do not measure seizures or clinical event burden. History defaults to retained peaks, with mean power and threshold occupancy still available through Field controls.
+
+Side view places earlier time at the Start end and recent time at Latest, with timestamps using the same nonlinear transform as the samples. A white reference line identifies the selected time. The ruler rotates with the scene. Labels keep a constant screen size in WebGL. The long axis is time, not left-to-right anatomy. Each small head has the same anatomical orientation. Whole history retains the concentric age mapping.
+
+The **4 patients** switch moves each patient's existing sound card into its own visual tile: A top left, B top right, C bottom left, D bottom right. This preserves the original independent capture, calibration, montage, sound and history instances; it does not share or remix their measurements. Single-patient view remains available. At narrow widths the layout stacks vertically. The listening exercise returns cards to its existing layout and hides all fields during trials.
+
+Validation covers dominant-band selection, unavailable-channel exclusion, time-axis endpoints and monotonicity across lens settings, and sharp-count preservation through compression. Existing numerical, audio, capture and exercise tests are retained. Browser interaction and physical graphics/audio acceptance remain to be evaluated; these code checks do not establish perceptual clarity or clinical performance.

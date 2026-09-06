@@ -21,7 +21,7 @@ The ACNS guideline index identifies separate guidance on electrode nomenclature,
 | Position on the head | Schematic electrode or derivation support | Sensor space; not an anatomical source solution |
 | Signed radial displacement | Newest reconstructed sample relative to the two-second mean, with opposing kernels for a bipolar pair | Updates with quantitative frames; does not replay every EEG cycle |
 | Light intensity | Log-compressed square root of absolute band power | A fixed adjustable µV ruler; not per-channel normalization |
-| Frequency color | Delta 0.5–4, theta 4–8, alpha 8–13, beta 13–30, and 30–45 Hz | Separate translucent layers; select one band to avoid color overlap |
+| Frequency color | Delta 0.5–4, theta 4–8, alpha 8–13, beta 13–30, and 30–45 Hz | Strongest-band surface plus five distinct amplitude bars per channel; band selection isolates its spatial pattern |
 | Historical radius | Age of the interval, recent near the head and older outward | Nonlinear time lens; numeric times remain available |
 | Side-profile position | The same age coordinate along one spatial axis | Rotating this axis does not change measurements |
 | Peak statistic | Maximum band power retained across constituent analysis windows | Can highlight a brief excursion; does not imply persistence |
@@ -29,7 +29,7 @@ The ACNS guideline index identifies separate guidance on electrode nomenclature,
 | Empty markers / missing surface | Unavailable, unseen or incompatible measurements | Not evidence of electrical silence |
 | Hatching | Band intersected by a known filter cutoff or the display's effective Nyquist limit | Filtering is disclosed, not inverted |
 
-The software fallback keeps rotatable projected surfaces, channel selection and time navigation, but shows one dominant band per interval when “All layers” is selected. It has no fly-through, perspective-FOV control or filter hatching; the context panel still lists affected bands. WebGL is needed for the complete layered view. Transparency and overlap can change perceived brightness with camera position; the numeric measurements and per-band view remain stable.
+The software fallback keeps rotatable projected surfaces, channel selection through the dropdown and time navigation, including all five channel band bars. It has no fly-through, perspective-FOV control or filter hatching; the context panel still lists affected bands. Concentric history transparency can change perceived brightness with camera position; numeric measurements and isolated band views remain stable. See [field detail](field-detail.md) for the current time ruler, sharp-candidate markers and four-patient layout.
 
 Live geometry settles toward each new measured state over roughly 150 ms. There is no oscillation or propagation added between updates. Reduced-motion preference disables this interpolation. A display refresh is a presentation update, not a reconstructed physiological event.
 

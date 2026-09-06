@@ -12,6 +12,7 @@ export class FeaturePipeline {
     this.lastEnd = null;
     this.segment = null;
     this.rate = null;
+    this.sharpSeen = new Map();
   }
   gap(start, end, settings, segment, source) {
     this.reset();
@@ -79,15 +80,20 @@ export class FeaturePipeline {
         c.valid === false
           ? { valid: false, bands: [] }
           : analyze(c.samples, rate, settings);
+      const transients = f.valid && c.status === 'observed'
+        ? transientFeatures(c.samples, rate, c.start)
+        : { available: false, events: [] };
+      const priorSharp = this.sharpSeen.get(c.name) ?? -Infinity;
+      const newSharp = transients.events.filter(e => e.time > priorSharp + .09);
+      if (newSharp.length) this.sharpSeen.set(c.name, newSharp.at(-1).time);
       return {
         name: c.name,
         status: c.status,
         from: c.from,
         ...f,
-        transients:
-          f.valid && c.status === 'observed'
-            ? transientFeatures(c.samples, rate, c.start)
-            : { available: false, events: [] },
+        transients,
+        sharpCount: newSharp.length,
+        sharpValidSeconds: transients.available ? end - start : 0,
         quality: c.quality ?? 1,
         validSeconds: f.valid ? end - start : 0,
         amplitudeHistogram: f.valid

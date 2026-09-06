@@ -661,3 +661,40 @@ aside { display: flex; flex-direction: column; }
 .patient-card details > label { margin-top: .6rem; }
 .sound-options > .mixer-controls { padding: .5rem; }
 [data-id='capture-status'] { margin: .5rem 0; overflow-wrap: anywhere; }
+[data-id='panel-details'] { display: none; }
+.orientation { font-size: .75rem; max-width: calc(100% - 2rem); }
+.quadrants #patients { display: none; }
+.quadrants #panels { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .5rem; padding: .5rem; }
+.quadrants .patient-panel { min-width: 0; border: 1px solid var(--patient-color); border-radius: 8px; overflow: hidden; }
+.quadrants .patient-card { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .1rem .5rem; margin: 0; padding: .35rem .6rem; border: 0; border-radius: 0; }
+.quadrants .patient-card > button { grid-column: 1; gap: .5rem; min-height: 30px; padding: 0; }
+.quadrants .patient-card b { font-size: 1rem; }
+.quadrants .patient-card .patient-state { grid-column: 1; font-size: .875rem; }
+.quadrants .patient-card .actions { grid-column: 2; grid-row: 1 / 3; align-self: center; }
+.quadrants .patient-card .pattern-state, .quadrants .patient-card .script-state,
+.quadrants .patient-card .patient-levels, .quadrants .patient-card > details { display: none; }
+.quadrants .controls-open .patient-card > details { display: block; grid-column: 1 / -1; }
+.quadrants .patient-panel > header { padding: .25rem .6rem; gap: .5rem; }
+.quadrants [data-patient-heading] { display: none; }
+.quadrants .patient-panel > header .actions { margin-left: auto; gap: .25rem; }
+.quadrants .patient-panel > header button { font-size: .875rem; padding: .35rem .5rem; }
+.quadrants .patient-panel > header [data-id='demo'], .quadrants .patient-panel > header [data-id='guide'] { display: none; }
+.quadrants [data-id='panel-details'] { display: inline-block; }
+.quadrants .patient-panel main { display: block; }
+.quadrants .patient-panel aside, .quadrants .navigation { display: none; }
+.quadrants .controls-open aside, .quadrants .controls-open .navigation { display: flex; }
+.quadrants .field-workspace { padding: .35rem .6rem; }
+.quadrants .viewbar { gap: .25rem; }
+.quadrants .segmented button { font-size: .875rem; padding: .25rem .5rem; }
+.quadrants [data-id='renderer-state'] { display: none; }
+.quadrants [data-id='stage'] { height: max(180px,calc((100vh - 620px)/2)); min-height: 180px; margin-top: .2rem; border-radius: 5px; }
+.quadrants .time-control { margin: .3rem 0; }
+.quadrants .time-control > .muted { display: none; }
+.quadrants .band-controls { margin-top: .2rem; gap: .2rem; }
+.quadrants .band-controls button { font-size: .75rem; min-height: 32px; padding: .2rem .35rem; }
+.quadrants [data-id='view-label'] { bottom: .45rem; left: .5rem; right: .5rem; }
+.quadrants .orientation { top: .45rem; left: .5rem; max-width: calc(100% - 1rem); }
+@media (max-width: 850px) {
+  .quadrants #panels { grid-template-columns: minmax(0,1fr); }
+  .quadrants [data-id='stage'] { height: 280px; }
+}

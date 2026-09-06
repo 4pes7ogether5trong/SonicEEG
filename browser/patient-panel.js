@@ -126,6 +126,8 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     $('pause').setAttribute('aria-pressed', 'false');
     $('follow').checked = true;
     context(null);
+    $('empty').hidden = false;
+    field?.update([], { total: 0 });
     $('channel').replaceChildren(new Option('All observed channels', ''));
     if (save && $('save-local').checked) return beginSave();
   }
@@ -222,7 +224,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       focus,
       total: shownEnd,
       cut: Number($('cut').value) >= 4 ? 20 : Number($('cut').value),
-      peaks: $('statistic').value === 'peaks',
+      peaks: mode !== 'live' && $('statistic').value === 'peaks',
       threshold,
     });
     text('clock', format(focus));
@@ -233,7 +235,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     );
     text(
       'view-label',
-      `${source === 'demo' ? 'SYNTHETIC EXAMPLE · ' : ''}${mode === 'side' ? 'Older time extends along the horizontal axis' : mode === 'history' ? 'Near the head = recent · outward = older' : 'Signed surface · two-second spectrum'} · ${f.mixed ? 'mixed recording settings' : 'sensor-space interpolation'}${field.software ? ' · software: one band at a time' : ''}`,
+      `${source === 'demo' ? 'SYNTHETIC · ' : ''}${mode === 'side' ? 'Each head = time interval · Start → Latest' : mode === 'history' ? 'Center = recent · outward = older' : 'Two-second spectrum · ' + $('scale').value + ' µV ruler'}${f.mixed ? ' · mixed settings' : ''}`,
     );
     const old = $('channel').value,
       names = f.channels.map((c) => c.name);
@@ -257,7 +259,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     if (c) {
       text(
         'channel-metrics',
-        `${selected || 'Largest RMS: ' + c.name} · ${c.valid ? c.rms.toFixed(1) + ' µV RMS' : 'unavailable'}`,
+        `${selected || 'Largest RMS: ' + c.name} · ${c.valid ? c.rms.toFixed(1) + ' µV RMS · peak ' + (Number.isFinite(c.peakHz) ? c.peakHz.toFixed(1) + ' Hz' : 'unavailable') : 'unavailable'}`,
       );
       text(
         'coverage',
@@ -969,6 +971,10 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
   };
   $('stop').onclick = stop;
   $('guide').onclick = () => $('help').showModal();
+  $('panel-details').onclick = () => {
+    const open = root.classList.toggle('controls-open');
+    $('panel-details').setAttribute('aria-expanded', String(open));
+  };
   $('home').onclick = () => ensureField().home();
   $('fly').onchange = () => ensureField().enter($('fly').checked);
   $('fov').oninput = () => {

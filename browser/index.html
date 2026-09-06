@@ -25,7 +25,7 @@
       <div class="actions">
         <button id="audio" class="primary" aria-pressed="false">
           Enable sound</button
-        ><button id="demo-all">Explore synthetic EEG</button><button id="speaker-test">Test speaker</button><details class="toolbar-more"><summary>Practice</summary><div class="actions"><button id="demo-history">Build full demo history</button><button id="demo-guided">Original sound demo</button
+        ><button id="layout" aria-pressed="false">4 patients</button><button id="demo-all">Explore synthetic EEG</button><button id="speaker-test">Test speaker</button><details class="toolbar-more"><summary>Practice</summary><div class="actions"><button id="demo-history">Build full demo history</button><button id="demo-guided">Original sound demo</button
         ><button id="exercise-open">Listening exercise</button
         ></div></details><button id="stop-all">Stop all</button>
       </div>
@@ -134,14 +134,14 @@
           <button data-id="capture" class="primary">Capture EEG window</button
           ><button data-id="demo">Synthetic example</button
           ><button data-id="stop" hidden>Stop capture</button
-          ><button data-id="guide">Guide</button>
+          ><button data-id="panel-details" aria-expanded="false">Controls</button><button data-id="guide">Guide</button>
         </div>
       </header>
       <main>
         <section class="field-workspace" aria-label="EEG visualization">
           <div class="viewbar">
             <div class="segmented" aria-label="View">
-              <button data-view="live" aria-pressed="true">Live surface</button
+              <button data-view="live" aria-pressed="true">Live field</button
               ><button data-view="history" aria-pressed="false">
                 Whole history</button
               ><button data-view="side" aria-pressed="false">
@@ -155,7 +155,7 @@
               <h1>Capture a patient window.</h1>
               <p>Select Capture EEG window to begin.</p>
             </div>
-            <div class="orientation">L / R follow the electrode labels</div>
+            <div class="orientation">Color = strongest band · bars = all bands · white ring = sharp candidate</div>
             <div data-id="view-label">
               Live field
             </div>
@@ -246,7 +246,7 @@
             <label
               >History statistic<select data-id="statistic">
                 <option value="typical">Mean band power</option>
-                <option value="peaks">Brief peaks retained</option>
+                <option value="peaks" selected>Brief peaks retained</option>
                 <option value="prevalence">
                   Time above amplitude threshold
                 </option>
@@ -479,6 +479,16 @@
         </form>
         <h2>Sound and a field with memory</h2>
         <p>
+          The surface uses the strongest displayed band at each location; the
+          five colored bars retain simultaneous band amplitudes at each channel.
+          Brightness and bar height follow the shared amplitude scale. White
+          rings mark measured sharp candidates, including artifacts; hollow
+          gray markers indicate unavailable channels. History preserves brief
+          peaks by default. Select Mean band power for typical activity.
+          The side ruler runs from Start to Latest; its white line marks the
+          selected time. Lens changes the spacing, not the timestamps.
+        </p>
+        <p>
           Explore synthetic EEG plays six changing scenes over 2:24, using 19
           simulated electrodes. Practice → Build full demo history opens the
           complete journey in the side view with playback stopped. Drag to
@@ -563,9 +573,9 @@
           Live surface shows the latest two-second analysis window. Signed
           displacement uses the newest reconstructed sample relative to the
           window mean. Spectral light updates every half second; motion is not a
-          playback of every EEG cycle. Each frequency band occupies a separate
-          translucent surface. Isolate a band to inspect mixed spectra without
-          overlap.
+          playback of every EEG cycle. One surface shows the strongest band;
+          the channel bars show all five bands. Select a band to inspect its
+          spatial pattern on its own.
         </p>
         <p>
           Whole history places older intervals outward. Side profile spreads

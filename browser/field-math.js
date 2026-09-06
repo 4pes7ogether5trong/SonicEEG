@@ -1,5 +1,5 @@
 import { POSITIONS, parseDerivation } from './montage.js';
-import { clamp, prevalence } from './signal.js';
+import { BANDS, clamp, prevalence } from './signal.js';
 export const normalize = (p) => {
   const d = Math.hypot(...p) || 1;
   return p.map((v) => v / d);
@@ -79,8 +79,9 @@ export function sampleField(
     coverage = Math.max(coverage, w.weight);
     if (c.affected?.[band]) affected += w.weight;
   });
-  if (sum < 1e-6) return { amp: 0, displacement: 0, coverage: 0, affected: 0 };
+  if (sum < 1e-6) return { amp: 0, magnitude: 0, displacement: 0, coverage: 0, affected: 0 };
   return {
+    magnitude: power / sum,
     amp:
       threshold >= 0
         ? clamp(power / sum, 0, 1)
@@ -97,4 +98,23 @@ export function timePosition(age, total, focusAge = 0, lens = 0.5) {
   const lo = Math.asinh(-focusAge / tau),
     hi = Math.asinh((span - focusAge) / tau);
   return (Math.asinh((age - focusAge) / tau) - lo) / (hi - lo || 1);
+}
+
+// One surface per time slice; choose a band rather than mixing five translucent hues.
+export function spectralField(weights, channels, { band = -1, scale = 80, peaks = false, selected = '', threshold = -1 } = {}) {
+  const values = BANDS.map((_, b) => sampleField(weights, channels, b, scale, peaks, selected, threshold));
+  const dominant = band >= 0 ? band : values.reduce((best, v, b) => v.magnitude > values[best].magnitude ? b : best, 0);
+  return { ...values[dominant], band: dominant };
+}
+export function sidePosition(time, total, focus = total, lens = .5) {
+  return 4 - 8 * timePosition(total - time, total, total - focus, lens);
+}
+export function fieldTime(time) {
+  time = Math.max(0, Math.round(time));
+  return time >= 3600
+    ? `${Math.floor(time / 3600)}:${String(Math.floor(time / 60) % 60).padStart(2, '0')}:${String(time % 60).padStart(2, '0')}`
+    : `${Math.floor(time / 60)}:${String(time % 60).padStart(2, '0')}`;
+}
+export function sideTicks(total, focus = total, lens = .5) {
+  return [0, .25, .5, .75, 1].map(f => ({ time: total * f, x: sidePosition(total * f, total, focus, lens) }));
 }

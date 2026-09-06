@@ -24,6 +24,7 @@ const panels = [],
     hasCapture: false,
   }));
 let selected = 0,
+  quadrants = false,
   inExercise = false,
   trial = 0,
   trialRunning = false,
@@ -66,6 +67,7 @@ for (const [slot, name] of PATIENTS.entries()) {
   cards.push(card);
   const root = document.createElement('div');
   root.className = 'patient-panel';
+  root.style.setProperty('--patient-color', colors[slot]);
   root.id = 'patient-' + name;
   root.hidden = true;
   root.append($('patient-template').content.cloneNode(true));
@@ -74,7 +76,7 @@ for (const [slot, name] of PATIENTS.entries()) {
   for (const label of root.querySelectorAll('label[for]'))
     label.htmlFor = 'patient-' + name + '-' + label.htmlFor;
   root.querySelector('[data-patient-heading]').textContent =
-    'Patient ' + name + ' · visual review';
+    'Patient ' + name;
   root.querySelector('[data-id="setup"] h2').textContent =
     'Patient ' + name + ' · confirm capture setup';
   card
@@ -89,7 +91,7 @@ for (const [slot, name] of PATIENTS.entries()) {
   );
   card.querySelector('[data-action="view"]').onclick = () => {
     selected = slot;
-    panels.forEach((p, i) => p.setVisible(i === slot && !inExercise));
+    applyLayout();
     refreshCards();
   };
   card.querySelector('[data-action="mute"]').onclick = () => {
@@ -132,6 +134,20 @@ for (const [slot, name] of PATIENTS.entries()) {
   };
 }
 panels[0].setVisible(true);
+
+function applyLayout() {
+  const grid = quadrants && !inExercise;
+  document.body.classList.toggle('quadrants', grid);
+  cards.forEach((card, i) => {
+    if (grid) document.getElementById('patient-' + PATIENTS[i]).prepend(card);
+    else $('patients').append(card);
+  });
+  panels.forEach((p, i) => p.setVisible(!inExercise && (grid || i === selected)));
+  $('layout').textContent = quadrants ? 'Single patient' : '4 patients';
+  $('layout').setAttribute('aria-pressed', String(quadrants));
+  $('layout').disabled = inExercise;
+}
+$('layout').onclick = () => { quadrants = !quadrants; applyLayout(); };
 
 function refreshCards() {
   mixer.poll();
@@ -369,7 +385,7 @@ $('exercise-open').onclick = () => {
     'Complete the sound check, then confirm a comfortable listening level.';
   $('exercise').hidden = false;
   document.body.classList.add('exercise-active');
-  panels.forEach((p) => p.setVisible(false));
+  applyLayout();
   prepareExercise(mixer);
   $('audio-spatial').value = 'maximum';
   $('audio-band').value = '-1';
@@ -388,7 +404,7 @@ $('exercise-close').onclick = () => {
   $('exercise').hidden = true;
   document.body.classList.remove('exercise-active');
   exerciseControls();
-  panels[selected].setVisible(true);
+  applyLayout();
   refreshCards();
 };
 

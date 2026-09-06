@@ -13,6 +13,8 @@ export function mergeBins(a, b) {
       status: x?.status === y?.status ? x.status : 'mixed',
       valid: validSeconds > 0 && !mixed,
       validSeconds,
+      sharpCount: (x?.sharpCount || 0) + (y?.sharpCount || 0),
+      sharpValidSeconds: (x?.sharpValidSeconds || 0) + (y?.sharpValidSeconds || 0),
       rms: Math.sqrt(
         ((x?.rms || 0) ** 2 * (x?.validSeconds || 0) +
           (y?.rms || 0) ** 2 * (y?.validSeconds || 0)) /
