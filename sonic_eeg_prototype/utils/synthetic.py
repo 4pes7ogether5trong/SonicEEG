@@ -3,7 +3,10 @@ from typing import Tuple
 import numpy as np
 from PIL import Image, ImageDraw
 
-from utils.config import AppConfig
+try:
+    from sonic_eeg_prototype.utils.config import AppConfig
+except ModuleNotFoundError:
+    from utils.config import AppConfig
 
 
 def _draw_trace(draw: ImageDraw.ImageDraw, bbox: Tuple[int, int, int, int], freq: float, phase: float, noise: float):
