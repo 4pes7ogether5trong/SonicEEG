@@ -19,6 +19,7 @@ This is an implemented research prototype. Compatibility with Natus, Cadwell, Ni
 - **Listening exercise:** an A→B→C→D sound check followed by eight 30-second synthetic trials with one, two and four active patients, including simultaneous changes. Patient gains and master volume are preserved. Unheard or interrupted clips can be retried without counting as missed selections. Reveal programmed targets and optionally export responses locally. This is not a validated clinical or psychometric test.
 - **Local history:** opt-in IndexedDB persistence and per-session deletion. Opening a saved session restores quantitative frames; the original EEG recording and screenshots are not archived.
 - **Guided synthetic example:** 84 seconds of quiet background, an isolated sharp transient, unilateral/bilateral repeating activity and spike-and-slow-wave-like complexes, including brief recurring and sustained patterns. Capture errors never switch to synthetic data.
+- **Dynamic visual journey:** choose **Explore synthetic EEG** for six scenes across 144 seconds, with traveling frequency changes, focal trains, bilateral rhythms, quiet/burst contrast and layered recovery. **Practice → Build full demo history** opens the whole journey in the side view without waiting for playback. See [synthetic journey](docs/synthetic-journey.md).
 
 ## Build and run — developers / site administrators
 

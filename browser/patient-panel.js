@@ -5,6 +5,7 @@ import { FeaturePipeline } from './pipeline.js';
 import { BrowserCapture } from './capture.js';
 import { FluidField } from './field.js';
 import { patientDemoBlock, DEMO_LENGTH } from './demo.js';
+import { showcaseBlock, showcasePhase, SHOWCASE_LENGTH } from './showcase.js';
 import { extractTraces } from './pixels.js';
 import {
   settingsDifference,
@@ -59,7 +60,8 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     confirmedNames = '',
     frozenFrame = null,
     frozenFrames = null,
-    frozenEnd = 0;
+    frozenEnd = 0,
+    demoKind = 'guided';
   function ensureField() {
     field ||= new FluidField(
       $('stage'),
@@ -301,6 +303,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     operation++;
     restoreToken++;
     active = false;
+    preloading = false;
     clearInterval(timer);
     timer = null;
     worker?.terminate();
@@ -793,32 +796,47 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     changes = null,
     seed = 1,
     duration = DEMO_LENGTH,
+    showcase = false,
   } = {}) {
     stop();
     const token = operation;
     await newHistory('demo');
     if (token !== operation) return;
+    demoKind = showcase ? 'showcase' : 'guided';
     active = true;
     audio.begin(slot);
     $('stop').hidden = false;
     text('source-state', 'SYNTHETIC · programmed example');
-    text('montage-name', 'Longitudinal bipolar · synthetic');
+    text('montage-name', showcase ? '19 electrodes · average reference · synthetic' : 'Longitudinal bipolar · synthetic');
+    const generate = showcase ? showcaseBlock : patientDemoBlock;
     const p = new FeaturePipeline(receive),
       s = { hp: 0.5, lp: 45, notch: 'off' };
     let t = 0;
     preloading = true;
-    for (; t < preload; t += 0.5)
+    for (; t < Math.min(preload, duration); t += 0.5) {
       p.ingest(
         {
           start: t,
           duration: 0.5,
           rate: 128,
-          channels: patientDemoBlock(t, 0.5, 128, { slot, changes, seed }),
+          channels: generate(t, 0.5, 128, { slot, changes, seed }),
         },
         { settings: s, segment: 'demo', source: 'demo' },
       );
+      if (t % 4 === 0) {
+        status('Building synthetic history · ' + Math.round(100 * t / preload) + '%');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        if (token !== operation) return;
+      }
+    }
     preloading = false;
     render();
+    if (t >= duration) {
+      stop();
+      root.querySelector('[data-view="side"]').click();
+      status('Complete synthetic history · drag to rotate; scroll to zoom.');
+      return;
+    }
     timer = setInterval(() => {
       if (!active) return;
       if (t >= duration) {
@@ -830,7 +848,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
           start: t,
           duration: 0.5,
           rate: 128,
-          channels: patientDemoBlock(t, 0.5, 128, { slot, changes, seed }),
+          channels: generate(t, 0.5, 128, { slot, changes, seed }),
         },
         { settings: s, segment: 'demo', source: 'demo' },
       );
@@ -840,7 +858,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       if (t === 6) audio.pinBaseline(slot);
     }, 500);
     status(
-      'Synthetic morphology demonstration. Script labels describe programmed signals, not detected diagnoses.',
+      showcase ? 'Synthetic journey · 2:24 · drag to rotate; scroll to zoom.' : 'Synthetic sound example · 1:24.',
     );
   }
   async function refreshSessions() {
@@ -941,7 +959,14 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       }),
   );
   $('capture').onclick = launchCapture;
-  $('demo').onclick = () => demo();
+  $('demo').onclick = async () => {
+    try {
+      await audio.enable();
+      await demo({ showcase: true, duration: SHOWCASE_LENGTH, preload: 2 });
+    } catch {
+      status('The demo could not start. Check sound permission and retry.', true);
+    }
+  };
   $('stop').onclick = stop;
   $('guide').onclick = () => $('help').showModal();
   $('home').onclick = () => ensureField().home();
@@ -1128,6 +1153,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     stop,
     time: () => history.end,
     hasCapture: () => Boolean(capture.stream),
+    demoLabel: () => demoKind === 'showcase' ? showcasePhase(history.end) : null,
     setVisible(value) {
       visible = value;
       root.hidden = !value;

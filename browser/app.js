@@ -12,6 +12,7 @@ import {
   trialAudible,
 } from './exercise.js';
 import { DEMO_LENGTH, demoPhase } from './demo.js';
+import { SHOWCASE_LENGTH } from './showcase.js';
 
 const $ = (id) => document.getElementById(id);
 const mixer = new PatientMixer({ onState: () => refreshCards() });
@@ -211,7 +212,7 @@ function refreshCards() {
         : '';
     card.querySelector('.script-state').textContent =
       metadata.source === 'demo' && !inExercise
-        ? 'PROGRAMMED · ' + demoPhase(slot, panels[slot]?.time() || 0)
+        ? 'SYNTHETIC · ' + (panels[slot]?.demoLabel() || demoPhase(slot, panels[slot]?.time() || 0))
         : '';
     const levels = state === 'live' ? audioLevels(s.frame).levels : [];
     card.querySelectorAll('.patient-levels i').forEach((bar, band) => {
@@ -237,6 +238,8 @@ function refreshCards() {
       : (mixer.volume ? 'Sound on' : 'Master volume is zero');
   const capturing = panels.some((p) => p.hasCapture());
   $('demo-all').disabled = capturing || inExercise;
+  $('demo-history').disabled = capturing || inExercise;
+  $('demo-guided').disabled = capturing || inExercise;
   $('exercise-open').disabled = capturing || inExercise;
 }
 
@@ -283,29 +286,37 @@ $('ambient').onchange = () =>
   mixer.configure({ ambient: $('ambient').checked });
 $('visuals').onchange = () =>
   panels.forEach((p) => p.setVisuals($('visuals').checked));
-$('demo-all').onclick = async () => {
+async function playDemo({ showcase = true, fullHistory = false } = {}) {
   if (panels.some((p) => p.hasCapture()) || inExercise) return;
   const token = ++demoToken;
   message(
-    'Starting an 84-second guided example. Keep device volume comfortable: quiet background first, then isolated, recurring and sustained changes. Labels show the script, not diagnoses.',
+    fullHistory ? 'Building the complete synthetic journey. Playback will be off.' :
+      showcase ? 'Six synthetic scenes · 2:24. Rotate the field or switch to Whole history.' :
+        'Original sound demo · 1:24.',
   );
   try {
-    await mixer.enable();
+    if (!fullHistory) await mixer.enable();
     if (token !== demoToken) return;
     mixer.configure({ ambient: true });
     $('ambient').checked = true;
     await Promise.all(
       panels.map((p, slot) =>
-        p.demo({ seed: slot + 1, preload: 0, duration: DEMO_LENGTH }),
+        p.demo({ seed: slot + 1, showcase,
+          preload: fullHistory ? SHOWCASE_LENGTH : showcase ? 2 : 0,
+          duration: showcase ? SHOWCASE_LENGTH : DEMO_LENGTH }),
       ),
     );
     if (token !== demoToken) return;
+    if (fullHistory) message('Full synthetic history ready · drag to rotate; use the timeline to explore.');
     refreshCards();
   } catch {
     if (token === demoToken)
       message('The synthetic example could not start. Stop all and try again.');
   }
-};
+}
+$('demo-all').onclick = () => playDemo();
+$('demo-history').onclick = () => playDemo({ fullHistory: true });
+$('demo-guided').onclick = () => playDemo({ showcase: false });
 
 function stopSources() {
   demoToken++;
