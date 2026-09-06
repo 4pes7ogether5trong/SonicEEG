@@ -1,4 +1,11 @@
 const keys = ['hp', 'lp', 'notch', 'seconds', 'sensitivity'];
+export function settingsWatchReference(confirmed, recognized) {
+  return Object.fromEntries(
+    keys
+      .filter((k) => recognized?.[k] != null)
+      .map((k) => [k, confirmed?.[k] ?? recognized[k]]),
+  );
+}
 // Never advance a confirmed reference merely because OCR produced new text.
 export function settingsDifference(confirmed, observed) {
   const changed = [],

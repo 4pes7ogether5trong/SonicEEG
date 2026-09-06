@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { settingsDifference, validFilters } from '../display-settings.js';
+import {
+  settingsDifference,
+  settingsWatchReference,
+  validFilters,
+} from '../display-settings.js';
 test('Confirmed settings survive unreadable OCR and expose later changes without reference drift', () => {
   const confirmed = {
     hp: 0.5,
@@ -22,6 +26,19 @@ test('Confirmed settings survive unreadable OCR and expose later changes without
     ['lp'],
   );
   assert.equal(confirmed.lp, 70);
+  const manual = settingsWatchReference(confirmed, { hp: null, lp: null });
+  assert.equal(
+    settingsDifference(manual, { hp: null, lp: null }).needsReview,
+    false,
+  );
+  const partial = settingsWatchReference(confirmed, { hp: 0.5 });
+  assert.deepEqual(settingsDifference(partial, { hp: null }).unreadable, [
+    'hp',
+  ]);
+  assert.equal(
+    settingsDifference(partial, { hp: 0.5, lp: null }).needsReview,
+    false,
+  );
   assert.deepEqual(
     settingsDifference(confirmed, {
       ...confirmed,

@@ -6,7 +6,11 @@ import { BrowserCapture } from './capture.js';
 import { FluidField } from './field.js';
 import { patientDemoBlock, DEMO_LENGTH } from './demo.js';
 import { extractTraces } from './pixels.js';
-import { settingsDifference, validFilters } from './display-settings.js';
+import {
+  settingsDifference,
+  settingsWatchReference,
+  validFilters,
+} from './display-settings.js';
 export function mountPatient(root, audio, slot, onState = () => {}) {
   let visible = false,
     preloading = false,
@@ -41,6 +45,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     ocrLabels = '',
     lastDetected = null,
     confirmedDisplay = null,
+    watchedDisplay = {},
     filterOnlyEligible = false,
     dimensions = [],
     watchAt = 0,
@@ -311,6 +316,8 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     $('setup-again').hidden = true;
     $('filters-quick').hidden = true;
     confirmedDisplay = null;
+    watchedDisplay = {};
+    text('settings-watch', 'Automatic settings check inactive.');
     filterOnlyEligible = false;
     status('Stopped. The captured history remains available.');
     text(
@@ -597,6 +604,15 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
         seconds: lastDetected?.seconds ?? null,
         sensitivity: lastDetected?.sensitivity ?? null,
       };
+      watchedDisplay = settingsWatchReference(confirmedDisplay, lastDetected);
+      text(
+        'settings-watch',
+        Object.keys(watchedDisplay).length
+          ? 'Automatic check: ' +
+              Object.keys(watchedDisplay).join(', ') +
+              '. Other settings require manual confirmation.'
+          : 'Settings are confirmed manually. Use Filters changed or full setup whenever the source display changes.',
+      );
       filterOnlyEligible = true;
       active = true;
       audio.begin(slot);
@@ -715,7 +731,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
         if (token !== operation || version !== capture.version || !active)
           return;
         const difference = regions.settings
-          ? settingsDifference(confirmedDisplay, next)
+          ? settingsDifference(watchedDisplay, next)
           : { needsReview: false, changed: [], unreadable: [] };
         const layoutChanged =
           checked.rows &&
@@ -1013,7 +1029,9 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     }
     for (const k of ['hp', 'lp']) $(k).value = s[k] ?? '';
     $('notch').value = s.notch ?? 'unknown';
-    lastDetected = { ...lastDetected, ...s };
+    if (lastDetected)
+      for (const k of ['hp', 'lp', 'notch'])
+        if (lastDetected[k] != null) lastDetected[k] = s[k];
     $('confirmed').checked = true;
     await begin();
     if (active) $('quick-filters').close();
