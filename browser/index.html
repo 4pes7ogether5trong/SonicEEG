@@ -13,19 +13,19 @@
       name="description"
       content="Four patient EEG sonification with local window capture and a fluid 3D history."
     />
-    <title>SonicEEG · Four voices</title>
+    <title>SonicEEG · Ambient voices</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
     <header class="monitor-header">
       <div class="identity">
         <span class="orbmark" aria-hidden="true"></span>
-        <div><b>SonicEEG</b><span>Four voices · living field</span></div>
+        <div><b>SonicEEG</b><span>Ambient voices · living field</span></div>
       </div>
       <div class="actions">
         <button id="audio" class="primary" aria-pressed="false">
           Enable sound</button
-        ><button id="demo-all">Try four synthetic patients</button
+        ><button id="demo-all">Play guided synthetic demo</button
         ><button id="exercise-open">Listening exercise</button
         ><button id="stop-all">Stop all</button>
       </div>
@@ -40,8 +40,8 @@
             type="range"
             min="0"
             max="100"
-            value="70"
-          /><output id="master-value">70%</output></label
+            value="35"
+          /><output id="master-value">35%</output></label
         >
         <label
           >Spatial sound
@@ -62,13 +62,17 @@
           </select></label
         >
         <label><input id="visuals" type="checkbox" checked />3D view</label>
+        <label
+          ><input id="ambient" type="checkbox" checked />Persistence
+          emphasis</label
+        >
         <span id="audio-status" role="status"
           >Sound off · capture runs independently</span
         >
       </div>
       <p id="monitor-message" role="status">
-        Choose a patient card, then capture its EEG window. Each patient retains
-        its own montage, calibration and history.
+        Audio output has increased. Start with low device volume. The guided
+        demo begins with quiet background, then brief and sustained changes.
       </p>
     </section>
     <section id="exercise" hidden aria-label="Synthetic listening exercise">
@@ -77,12 +81,23 @@
         <button id="exercise-close">Leave exercise</button>
       </div>
       <p>
-        Eight repeatable trials with 1, 2 or 4 synthetic patients. Listen for an
-        increase in one frequency band; select every patient you hear change.
-        Two trials include simultaneous changes. This is a feasibility exercise.
+        Learn the four voices first. Then listen for brief sharp accents or a
+        growing change in texture; select every patient you hear change. Eight
+        30-second synthetic clips include isolated, repeating and simultaneous
+        patterns. This is a feasibility exercise, not a diagnostic test.
       </p>
       <div class="actions">
-        <button id="trial-start" class="primary">Start trial 1</button
+        <button id="sound-check">1 · Hear A → B → C → D</button
+        ><span id="sound-check-state" role="status"
+          >Reference voices, not EEG data.</span
+        >
+      </div>
+      <label class="sound-confirm"
+        ><input id="sound-confirmed" type="checkbox" />I can comfortably hear
+        the reference voices.</label
+      >
+      <div class="actions">
+        <button id="trial-start" class="primary" disabled>Start trial 1</button
         ><span id="trial-state" role="status"
           >Enable sound and set a comfortable volume first.</span
         >
@@ -96,8 +111,15 @@
         ><button id="trial-answer">Submit answer</button>
       </fieldset>
       <p id="trial-result" role="status"></p>
+      <button id="trial-unheard" disabled>
+        I could not hear the clip — retry
+      </button>
       <ol id="trial-results"></ol>
       <button id="trial-export" disabled>Export exercise results</button>
+      <p class="muted">
+        Gain and master volume are preserved. A two-note descending cue means
+        data is unavailable; it is not an EEG event.
+      </p>
     </section>
     <div id="panels"></div>
     <footer>
@@ -427,8 +449,28 @@
           Each patient keeps the same octave: A uses C3–A3, B C4–A4, C C5–A5 and
           D C6–A6. Within each octave, delta, theta, alpha, beta and gamma use
           C, D, E, G and A. Their loudness follows band RMS on a shared voltage
-          scale. Pitch identifies patient and band; it is not a direct frequency
-          readout.
+          scale. Velvet, Hollow, Reed and Glass give the patients different
+          harmonic textures. Pitch identifies patient and band; it is not a
+          direct frequency readout. Mono phone speakers cannot convey left/right
+          stereo location, and comfortable device levels still need checking.
+        </p>
+        <p>
+          Persistence emphasis adds brief accents for measured sharp candidates
+          and a bounded increase in brightness and prominence when changes
+          repeat or persist. A separate held E tone carries emphasis, not band
+          power. Emphasis releases gradually after the pattern ends. There is no
+          decorative beat, noise layer or artificial EEG rhythm. Turn emphasis
+          off to hear the band mapping alone.
+        </p>
+        <p>
+          These are experimental shape and repetition descriptors, not detection
+          of periodic discharges, spike-wave activity or seizures. Artifacts can
+          also trigger emphasis. Sharp-shape analysis requires at least 100
+          displayed samples per second; missing samples make it unavailable.
+          Filtering, reference and screen resolution can alter or hide shapes.
+          Pin baseline uses the current two-second measured spectrum as a fixed
+          reference; select a clean interval in the source EEG first. It does
+          not diagnose normality. Source or recording-setting changes clear it.
         </p>
         <p>
           The default uses the largest observed band power on each side to keep
@@ -442,8 +484,21 @@
           band, scale or history time does not change sound. Freeze view freezes
           only the image. Sound fades if no new valid interval arrives for 2.5
           seconds. A silent recording, a capture gap and a muted patient have
-          separate status labels. Identify plays a brief reference note, not EEG
-          activity.
+          separate status labels. A descending two-note cue means data became
+          unavailable, not an EEG event. It cannot sound if the browser audio
+          system is suspended. Identify plays a brief reference voice, not EEG
+          activity, and bypasses patient gain/mute while respecting master
+          volume. Stop all cancels reference voices as well as the sources.
+        </p>
+        <p>
+          The guided demo is 84 seconds long: a quiet start, an isolated left
+          transient in A, sustained left activity in A, bilateral activity in B
+          and C, and brief recurring then sustained right activity in D. The
+          known quiet interval is pinned automatically only for synthetic data.
+          Programmed labels are hidden during the listening exercise. The
+          exercise preserves your output levels and does not score an unheard or
+          interrupted clip. Audio gain has increased: begin with low device
+          volume, especially with headphones.
         </p>
         <p>
           Use the same desktop browser tab for this prototype and keep it

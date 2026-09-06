@@ -1,5 +1,6 @@
 import { analyze, amplitudeHistogram } from './signal.js';
 import { derive } from './montage.js';
+import { transientFeatures } from './patterns.js';
 export class FeaturePipeline {
   constructor(onFrame) {
     this.onFrame = onFrame;
@@ -83,6 +84,10 @@ export class FeaturePipeline {
         status: c.status,
         from: c.from,
         ...f,
+        transients:
+          f.valid && c.status === 'observed'
+            ? transientFeatures(c.samples, rate, c.start)
+            : { available: false, events: [] },
         quality: c.quality ?? 1,
         validSeconds: f.valid ? end - start : 0,
         amplitudeHistogram: f.valid

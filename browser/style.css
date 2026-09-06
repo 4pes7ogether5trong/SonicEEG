@@ -23,7 +23,7 @@ textarea {
 }
 button,
 select,
-input[type="number"],
+input[type='number'],
 textarea {
   border: 1px solid var(--border);
   border-radius: 7px;
@@ -42,7 +42,7 @@ button:disabled {
   opacity: 0.45;
   cursor: wait;
 }
-button[aria-pressed="true"] {
+button[aria-pressed='true'] {
   background: #234850;
   border-color: #66baba;
   color: #c6ffef;
@@ -67,19 +67,19 @@ label {
   display: block;
   font-size: 0.875rem;
 }
-input[type="range"] {
+input[type='range'] {
   accent-color: #82c8c8;
   vertical-align: middle;
   min-width: 80px;
   max-width: 100%;
 }
-input[type="checkbox"] {
+input[type='checkbox'] {
   accent-color: #82c8c8;
   margin-right: 0.45rem;
 }
 select,
 textarea,
-input[type="number"] {
+input[type='number'] {
   width: 100%;
   display: block;
   margin: 0.3rem 0 0.65rem;
@@ -135,7 +135,7 @@ header {
   );
   box-shadow: 0 0 18px #6d99e04a;
 }
-[data-id="source-state"] {
+[data-id='source-state'] {
   font-size: 0.875rem;
   color: #b8d6db;
 }
@@ -166,11 +166,11 @@ main {
   gap: 0.35rem;
   flex-wrap: wrap;
 }
-[data-id="renderer-state"] {
+[data-id='renderer-state'] {
   font-size: 0.75rem;
   color: var(--muted);
 }
-[data-id="stage"] {
+[data-id='stage'] {
   position: relative;
   height: min(65vh, 760px);
   min-height: 390px;
@@ -179,13 +179,13 @@ main {
   border-radius: 12px;
   overflow: hidden;
 }
-[data-id="stage"] canvas {
+[data-id='stage'] canvas {
   display: block;
   width: 100%;
   height: 100%;
   touch-action: none;
 }
-[data-id="empty"] {
+[data-id='empty'] {
   position: absolute;
   z-index: 1;
   left: 50%;
@@ -196,7 +196,7 @@ main {
   text-align: center;
   pointer-events: none;
 }
-[data-id="empty"] p {
+[data-id='empty'] p {
   font-size: 0.9rem;
 }
 .orientation {
@@ -207,7 +207,7 @@ main {
   color: #adbdce;
   pointer-events: none;
 }
-[data-id="view-label"] {
+[data-id='view-label'] {
   position: absolute;
   left: 1rem;
   right: 1rem;
@@ -228,7 +228,7 @@ main {
   align-items: center;
   gap: 0.3rem;
 }
-.navigation input[type="range"] {
+.navigation input[type='range'] {
   width: 85px;
 }
 .time-control {
@@ -248,7 +248,7 @@ main {
 .spread label {
   font-size: 0.9rem;
 }
-[data-id="clock"] {
+[data-id='clock'] {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   margin-left: 0.6rem;
@@ -294,27 +294,27 @@ aside section {
 aside section > label {
   margin: 0.8rem 0;
 }
-aside input[type="range"] {
+aside input[type='range'] {
   display: block;
   width: 100%;
   margin: 0.5rem 0;
 }
-[data-id="capture-status"] {
+[data-id='capture-status'] {
   font-size: 0.85rem;
   margin: 0.6rem 0;
   color: #c1dadf;
   overflow-wrap: anywhere;
 }
-[data-id="availability"] {
+[data-id='availability'] {
   padding: 0;
   list-style: none;
   font-size: 0.8rem;
 }
-[data-id="availability"] li {
+[data-id='availability'] li {
   padding: 0.3rem 0;
   border-bottom: 1px solid #1c2b3a;
 }
-[data-id="availability"] .missing {
+[data-id='availability'] .missing {
   color: #f0c38b;
 }
 details {
@@ -351,7 +351,7 @@ dialog::backdrop {
   float: right;
   font-size: 1.3rem;
 }
-[data-id="setup-preview"] {
+[data-id='setup-preview'] {
   display: block;
   width: 100%;
   height: auto;
@@ -360,7 +360,7 @@ dialog::backdrop {
   touch-action: none;
   border: 1px solid var(--border);
 }
-[data-id="setup-status"] {
+[data-id='setup-status'] {
   padding: 0.65rem;
   background: #19313c;
   font-size: 0.875rem;
@@ -374,13 +374,13 @@ dialog::backdrop {
 .setup-fields {
   min-width: 0;
 }
-[data-id="help"] {
+[data-id='help'] {
   max-width: 700px;
 }
-[data-id="help"] p {
+[data-id='help'] p {
   font-size: 0.95rem;
 }
-[data-id="storage-state"] {
+[data-id='storage-state'] {
   font-size: 0.8rem;
   margin-top: 0.5rem;
 }
@@ -397,7 +397,7 @@ dialog::backdrop {
   header {
     padding: 0.8rem;
   }
-  [data-id="stage"] {
+  [data-id='stage'] {
     min-height: 340px;
   }
   .navigation {
@@ -414,7 +414,7 @@ dialog::backdrop {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 1rem;
   }
-  [data-id="stage"] {
+  [data-id='stage'] {
     height: 54vh;
     min-height: 330px;
   }
@@ -427,7 +427,7 @@ dialog::backdrop {
   header button {
     font-size: 0.875rem;
   }
-  [data-id="empty"] h1 {
+  [data-id='empty'] h1 {
     font-size: 1.3rem;
   }
   dialog {
@@ -491,12 +491,12 @@ dialog::backdrop {
   min-height: 1.6em;
   margin: 0.1rem 0 0.4rem;
 }
-.patient-card[data-state="live"] .patient-state {
+.patient-card[data-state='live'] .patient-state {
   color: #8edbcc;
 }
-.patient-card[data-state="stale"] .patient-state,
-.patient-card[data-state="review"] .patient-state,
-.patient-card[data-state="gap"] .patient-state {
+.patient-card[data-state='stale'] .patient-state,
+.patient-card[data-state='review'] .patient-state,
+.patient-card[data-state='gap'] .patient-state {
   color: #ffd299;
 }
 .patient-card .actions {
@@ -513,7 +513,7 @@ dialog::backdrop {
   font-size: 0.875rem;
   margin-top: 0.5rem;
 }
-.patient-card input[type="range"] {
+.patient-card input[type='range'] {
   min-width: 0;
   width: 100%;
 }
@@ -532,6 +532,24 @@ dialog::backdrop {
   min-height: 2px;
   border-radius: 2px;
 }
+.pattern-state,
+.script-state {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--muted);
+  min-height: 1.5em;
+  margin-bottom: 0.4rem;
+}
+.script-state {
+  color: #c5d7ea;
+}
+.sound-confirm {
+  margin: 1rem 0;
+}
+#sound-check-state {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
 .mixer-controls {
   display: flex;
   gap: 0.8rem 1.2rem;
@@ -545,7 +563,7 @@ dialog::backdrop {
   gap: 0.4rem;
   font-size: 0.875rem;
 }
-.mixer-controls input[type="range"] {
+.mixer-controls input[type='range'] {
   width: 95px;
 }
 #audio-status,
@@ -563,7 +581,7 @@ dialog::backdrop {
 .patient-panel > header b {
   color: #e1edf6;
 }
-.patient-panel [data-id="stage"] {
+.patient-panel [data-id='stage'] {
   height: min(55vh, 650px);
 }
 #exercise {
@@ -598,10 +616,13 @@ dialog::backdrop {
   line-height: 1.8;
 }
 body.exercise-active #panels,
-body.exercise-active .patient-levels {
+body.exercise-active .patient-levels,
+body.exercise-active .pattern-state,
+body.exercise-active .script-state {
   display: none;
 }
-body.exercise-active .patient-card [data-action="identify"] {
+body.exercise-active .patient-card [data-action='identify'],
+body.exercise-active .patient-card [data-action='baseline'] {
   visibility: hidden;
 }
 @media (max-width: 880px) {

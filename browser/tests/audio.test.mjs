@@ -5,11 +5,21 @@ import {
   audioLevels,
   LiveAudioState,
   FRESH_SECONDS,
+  VOICE_PROFILES,
+  outputCurve,
 } from '../audio-mapping.js';
 import { PatientMixer } from '../audio.js';
 import { FeaturePipeline } from '../pipeline.js';
 import { patientDemoBlock } from '../demo.js';
-import { TRIALS, scoreTrial } from '../exercise.js';
+import {
+  TRIALS,
+  scoreTrial,
+  prepareExercise,
+  listeningSettings,
+  trialAudible,
+  trialEvents,
+  TRIAL_DURATION,
+} from '../exercise.js';
 
 const channel = (name, rms, status = 'observed') => ({
   name,
@@ -117,6 +127,7 @@ class AudioNode {
       'threshold',
       'knee',
       'ratio',
+      'Q',
     ])
       this[key] = new Param();
   }
@@ -136,6 +147,12 @@ class AudioContextDouble {
     return new AudioNode();
   }
   createDynamicsCompressor() {
+    return new AudioNode();
+  }
+  createWaveShaper() {
+    return new AudioNode();
+  }
+  createBiquadFilter() {
     return new AudioNode();
   }
   createOscillator() {
@@ -198,6 +215,153 @@ test('Audio-clock expiry, per-patient mute/focus and data-loss isolation do not 
     ),
     'enabling sound never auditions old measurements',
   );
+});
+
+test('Comfort settings survive exercise preparation; zero-level or interrupted sound cannot pass readiness', async () => {
+  const context = new AudioContextDouble(),
+    mixer = new PatientMixer({ contextFactory: () => context });
+  await mixer.enable();
+  mixer.configure({ volume: 0.72, band: 3, focus: 2, ambient: false });
+  [1.3, 0.8, 1.5, 1.1].forEach((gain, slot) =>
+    mixer.patient(slot, { gain, muted: true }),
+  );
+  prepareExercise(mixer);
+  assert.deepEqual(listeningSettings(mixer), {
+    master: 0.72,
+    gains: [1.3, 0.8, 1.5, 1.1],
+    spatial: 'maximum',
+    band: -1,
+    emphasis: true,
+    focus: -1,
+  });
+  assert.equal(trialAudible(mixer, 2), true);
+  mixer.patient(0, { gain: 0 });
+  assert.equal(trialAudible(mixer, 2), false);
+  mixer.patient(0, { gain: 1 });
+  mixer.configure({ volume: 0 });
+  assert.equal(trialAudible(mixer, 2), false);
+  mixer.configure({ volume: 0.4 });
+  context.state = 'suspended';
+  assert.equal(trialAudible(mixer, 2), false);
+  assert.equal(trialAudible(mixer, TRIALS.length), false);
+});
+
+test('All four timbres differ, calibrated gain is higher, and the digital output transfer stays bounded', () => {
+  assert.equal(
+    new Set(VOICE_PROFILES.map((v) => v.partials.join(','))).size,
+    4,
+  );
+  assert.equal(audioLevels(frame(1, 40)).levels[0].gain, 0.1);
+  assert.equal(audioLevels(frame(1, 400)).levels[0].gain, 0.2);
+  for (let i = -1000; i <= 1000; i++) {
+    const y = outputCurve(i / 10);
+    assert.ok(Number.isFinite(y) && Math.abs(y) <= 0.95);
+    if (i > -1000) assert.ok(y >= outputCurve((i - 1) / 10));
+  }
+  assert.equal(outputCurve(0), 0);
+});
+
+test('Measured synthetic transients schedule accents, persistence grows, and gaps cancel data cues without other-patient loss', async () => {
+  const context = new AudioContextDouble(),
+    mixer = new PatientMixer({
+      now: () => context.currentTime,
+      contextFactory: () => context,
+    });
+  await mixer.enable();
+  mixer.begin(0);
+  mixer.begin(1);
+  mixer.ingest(1, frame(2));
+  const accents = [],
+    values = [];
+  const pipeline = new FeaturePipeline((f) => {
+    const previous = new Set(mixer.notes);
+    mixer.ingest(0, f);
+    for (const n of mixer.notes)
+      if (!previous.has(n) && n.kind === 'data')
+        accents.push({ end: f.end, level: n.gain.gain.events[0].value });
+    values.push({ end: f.end, ...mixer.trackers[0].value });
+    // Model natural oscillator completion so the double does not retain old notes.
+    for (const n of [...mixer.notes])
+      if (n.gain.gain.events.at(-1).time < context.currentTime)
+        n.oscillator.onended();
+  });
+  for (let start = 0; start < 40; start += 0.5) {
+    context.currentTime = start + 0.5;
+    mixer.ingest(1, frame(start + 3));
+    pipeline.ingest(
+      {
+        start,
+        duration: 0.5,
+        rate: 128,
+        channels: patientDemoBlock(start, 0.5, 128, { slot: 0 }),
+      },
+      { segment: 'test' },
+    );
+  }
+  assert.equal(
+    accents.length,
+    26,
+    'one isolated cue and 25 repeated complexes; no script labels enter the mixer',
+  );
+  assert.ok(accents[0].end >= 8 && accents[0].end <= 9);
+  assert.ok(
+    accents.at(-1).level > accents[1].level,
+    'same programmed amplitude grows more prominent with persistence',
+  );
+  assert.ok(
+    values.find((v) => v.end === 30).emphasis >
+      values.find((v) => v.end === 20).emphasis,
+  );
+  mixer.unavailable(0);
+  assert.equal(mixer.trackers[0].value.emphasis, 0);
+  assert.ok(![...mixer.notes].some((n) => n.slot === 0 && n.kind === 'data'));
+  assert.equal(
+    [...mixer.notes].filter((n) => n.slot === 0 && n.kind === 'status').length,
+    2,
+  );
+  assert.equal(mixer.live.status(1), 'live');
+  assert.ok(
+    mixer.voices[1].voices.some((v) =>
+      v.gain.gain.events.some((e) => e.value > 0),
+    ),
+  );
+  mixer.poll();
+  mixer.unavailable(0);
+  assert.equal(
+    [...mixer.notes].filter((n) => n.kind === 'status').length,
+    2,
+    'one technical cue per outage',
+  );
+  mixer.ingest(0, frame(41));
+  assert.ok(
+    ![...mixer.notes].some((n) => n.kind === 'status'),
+    'recovery cancels pending loss notes',
+  );
+  mixer.identify(0);
+  assert.ok([...mixer.notes].some((n) => n.kind === 'reference'));
+  mixer.configure({ ambient: false });
+  assert.equal(
+    mixer.voices[0].accentGain.gain.events.find((e) => e.type === 'target')
+      .value,
+    0,
+  );
+  mixer.stop(0);
+  assert.ok(![...mixer.notes].some((n) => n.slot === 0));
+});
+
+test('Listening examples include brief, sustained and simultaneous morphology with quiet calibration and release', () => {
+  assert.equal(TRIAL_DURATION, 30);
+  const kinds = new Set();
+  for (let i = 0; i < TRIALS.length; i++) {
+    const [event] = trialEvents(i);
+    assert.equal(event.start, 8);
+    assert.ok(event.end < TRIAL_DURATION);
+    assert.deepEqual(event.slots, TRIALS[i].targets);
+    kinds.add(event.type);
+    assert.ok(scoreTrial(i, event.slots, 12).correct);
+  }
+  assert.deepEqual(kinds, new Set(['single', 'periodic', 'spike-wave']));
+  assert.equal(TRIALS.filter((t) => t.targets.length === 2).length, 2);
 });
 
 test('Four-stream synthetic pipeline produces only the programmed patient and band changes', () => {

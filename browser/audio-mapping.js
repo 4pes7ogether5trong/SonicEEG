@@ -4,6 +4,13 @@ export const PATIENTS = Object.freeze(['A', 'B', 'C', 'D']);
 export const NOTES = Object.freeze(['C', 'D', 'E', 'G', 'A']);
 export const SEMITONES = Object.freeze([0, 2, 4, 7, 9]);
 export const FRESH_SECONDS = 2.5;
+export const VOICE_PROFILES = Object.freeze([
+  { name: 'Velvet', partials: [1, 0.65, 0.18, 0.06] },
+  { name: 'Hollow', partials: [1, 0, 0.65, 0, 0.2] },
+  { name: 'Reed', partials: [1, 0.6, 0.42, 0.28, 0.14] },
+  { name: 'Glass', partials: [1, 0.1, 0.04, 0.25] },
+]);
+export const outputCurve = (x) => 0.95 * Math.tanh(x / 0.95);
 
 export function carrier(slot, band) {
   if (
@@ -48,7 +55,7 @@ export function audioLevels(frame, { spatial = 'maximum', band = -1 } = {}) {
         band: b,
         side,
         rms,
-        gain: band >= 0 && band !== b ? 0 : 0.018 * Math.min(2, rms / 40),
+        gain: band >= 0 && band !== b ? 0 : 0.1 * Math.min(2, rms / 40),
       });
     }
   return { levels, valid: observed.length > 0, channels: observed.length };

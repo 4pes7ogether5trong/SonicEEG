@@ -4,7 +4,7 @@ import { TemporalHistory, LocalArchive, summarizeFrames } from './history.js';
 import { FeaturePipeline } from './pipeline.js';
 import { BrowserCapture } from './capture.js';
 import { FluidField } from './field.js';
-import { patientDemoBlock } from './demo.js';
+import { patientDemoBlock, DEMO_LENGTH } from './demo.js';
 import { extractTraces } from './pixels.js';
 export function mountPatient(root, audio, slot, onState = () => {}) {
   let visible = false,
@@ -752,7 +752,12 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       );
     }
   }
-  async function demo({ preload = 30, changes = null, seed = 1 } = {}) {
+  async function demo({
+    preload = 0,
+    changes = null,
+    seed = 1,
+    duration = DEMO_LENGTH,
+  } = {}) {
     stop();
     const token = operation;
     await newHistory('demo');
@@ -780,6 +785,10 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     render();
     timer = setInterval(() => {
       if (!active) return;
+      if (t >= duration) {
+        stop();
+        return;
+      }
       p.ingest(
         {
           start: t,
@@ -790,9 +799,12 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
         { settings: s, segment: 'demo', source: 'demo' },
       );
       t += 0.5;
+      // The demonstrator's known quiet interval is explicit. Real capture
+      // has no automatic baseline selection and requires the operator to pin it.
+      if (t === 6) audio.pinBaseline(slot);
     }, 500);
     status(
-      'Synthetic background with programmed temporal band-power changes. No patient data.',
+      'Synthetic morphology demonstration. Script labels describe programmed signals, not detected diagnoses.',
     );
   }
   async function refreshSessions() {
@@ -1002,6 +1014,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
   return {
     demo,
     stop,
+    time: () => history.end,
     hasCapture: () => Boolean(capture.stream),
     setVisible(value) {
       visible = value;
