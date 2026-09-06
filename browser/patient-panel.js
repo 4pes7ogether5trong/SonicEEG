@@ -4,6 +4,7 @@ import { TemporalHistory, LocalArchive, summarizeFrames } from './history.js';
 import { FeaturePipeline } from './pipeline.js';
 import { BrowserCapture } from './capture.js';
 import { FluidField } from './field.js';
+import { recentWaveforms } from './waveform.js';
 import { patientDemoBlock, DEMO_LENGTH } from './demo.js';
 import {
   showcaseBlock,
@@ -64,6 +65,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     confirmedNames = '',
     frozenFrame = null,
     frozenFrames = null,
+    frozenRecent = null,
     frozenEnd = 0,
     demoKind = 'guided';
   function ensureField() {
@@ -197,38 +199,55 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     $('time').max = String(shownEnd);
     if ($('follow').checked) $('time').value = String(shownEnd);
     const focus = Number($('time').value),
+      frequencyMap = $('color-mode').value === 'frequency',
+      relief = frequencyMap && $('surface-mode').value === 'relief',
       frames =
-        mode === 'live'
-          ? [f]
-          : paused
-            ? frozenFrames
-            : historyDetail
-              ? summarizeFrames(historyDetail)
-              : history.overview(16),
+        mode === 'recent'
+          ? paused
+            ? frozenRecent
+            : recentWaveforms(historyDetail || history.bins(), focus)
+          : mode === 'live'
+            ? [f]
+            : paused
+              ? frozenFrames
+              : historyDetail
+                ? summarizeFrames(historyDetail)
+                : history.overview(relief ? 8 : 16),
       threshold =
-        $('statistic').value === 'prevalence' ? Number($('occupancy-threshold').value) : -1;
-    const frequencyMap = $('color-mode').value === 'frequency';
-    $('statistic').disabled = !frequencyMap;
+        !relief && $('statistic').value === 'prevalence'
+          ? Number($('occupancy-threshold').value)
+          : -1;
+    $('surface-mode').disabled = !frequencyMap;
+    $('color-off').disabled = !frequencyMap;
+    $('statistic').disabled = !frequencyMap || relief || mode === 'recent';
     $('occupancy-threshold').disabled = threshold < 0 || !frequencyMap;
     $('scale').disabled = threshold >= 0 || !frequencyMap;
     field.update(frames, {
       map: $('color-mode').value,
-      mode,
+      mode: mode === 'recent' ? 'side' : mode,
+      relief,
+      monochrome: frequencyMap && $('color-off').checked,
+      recent: mode === 'recent',
+      rangeStart: mode === 'recent' ? frames[0]?.start || 0 : 0,
       band,
       selected,
       scale: Number($('scale').value),
       lens: Number($('time-lens').value),
       focus,
-      total: shownEnd,
+      total: mode === 'recent' ? frames.at(-1)?.end || focus : shownEnd,
       cut: Number($('cut').value) >= 4 ? 20 : Number($('cut').value),
-      peaks: mode !== 'live' && $('statistic').value === 'peaks',
+      peaks: !relief && mode !== 'live' && mode !== 'recent' && $('statistic').value === 'peaks',
       threshold,
     });
     text('clock', format(focus));
     text(
       'map-legend',
       $('color-mode').value === 'frequency'
-        ? 'Color = strongest band · white ring = sharp candidate'
+        ? relief
+          ? 'Relief = signed waveform · ' +
+            ($('color-off').checked ? 'color off' : 'color = strongest band')
+          : ($('color-off').checked ? 'Color off' : 'Color = strongest band') +
+            ' · white ring = sharp candidate'
         : $('color-mode').value === 'change'
           ? 'Baseline Δ · blue = less · orange = more · full color = 12 dB'
           : 'Changed time · dark 0% → orange 100% · ≥6 dB',
@@ -257,11 +276,11 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     text('elapsed', format(history.end));
     text(
       'resolution',
-      `${format(f.start)}–${format(f.end)} · ${f.leaves > 1 ? 'compressed summary' : 'quantitative frame'}${f.gaps ? ' · capture gap' : ''}`,
+      `${format(f.start)}–${format(f.end)} · ${f.leaves > 1 ? 'compressed summary' : 'quantitative frame'}${f.gaps ? ' · capture gap' : ''}${relief ? (f.waveform ? ` · ${f.leaves > 1 ? 'example' : 'waveform'} ${format(f.waveform.start)}–${format(f.waveform.end)}` : ' · waveform unavailable') : ''}`,
     );
     text(
       'view-label',
-      `${source === 'demo' ? 'SYNTHETIC · ' : ''}${mode === 'side' ? '' : mode === 'history' ? 'Center = recent · outward = older' : frequencyMap ? 'Two-second spectrum · ' + $('scale').value + ' µV ruler' : 'Two-second spectrum · fixed baseline'}${f.mixed ? ' · mixed settings' : ''}`,
+      `${source === 'demo' ? 'SYNTHETIC · ' : ''}${mode === 'recent' ? `${frames.length} retained windows · older → newer` : mode === 'side' ? (relief ? 'Representative 2-second windows' : '') : mode === 'history' ? 'Center = recent · outward = older' + (relief ? ' · example windows' : '') : relief ? 'Two-second waveform · ' + $('scale').value + ' µV ruler' : frequencyMap ? 'Two-second spectrum · ' + $('scale').value + ' µV ruler' : 'Two-second spectrum · fixed baseline'}${f.mixed ? ' · mixed settings' : ''}`,
     );
     const old = $('channel').value,
       names = f.channels.map((c) => c.name);
@@ -921,7 +940,11 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
         root
           .querySelectorAll('[data-view]')
           .forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-        if (mode === 'side') ensureField().side();
+        if (mode === 'recent') {
+          $('surface-mode').value = 'relief';
+          $('color-mode').value = 'frequency';
+        }
+        if (mode === 'side' || mode === 'recent') ensureField().side();
         else ensureField().home();
         render();
       }),
@@ -956,7 +979,13 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
   };
   $('stop').onclick = stop;
   $('guide').onclick = () => $('help').showModal();
-  $('color-mode').onchange = render;
+  $('color-mode').onchange = () => {
+    if (mode === 'recent' && $('color-mode').value !== 'frequency')
+      root.querySelector('[data-view="side"]').click();
+    else render();
+  };
+  $('surface-mode').onchange = render;
+  $('color-off').onchange = render;
   $('panel-details').onclick = () => {
     const open = root.classList.toggle('controls-open');
     $('panel-details').setAttribute('aria-expanded', String(open));
@@ -985,6 +1014,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     if (!paused) {
       frozenFrame = visibleFrame();
       frozenFrames = history.overview(16);
+      frozenRecent = recentWaveforms(historyDetail || history.bins(), Number($('time').value));
       frozenEnd = history.end;
     }
     paused = !paused;

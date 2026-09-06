@@ -141,6 +141,7 @@
           <div class="viewbar">
             <div class="segmented" aria-label="View">
               <button data-view="live" aria-pressed="true">Live field</button
+              ><button data-view="recent" aria-pressed="false">Recent stack</button
               ><button data-view="history" aria-pressed="false">Whole history</button
               ><button data-view="side" aria-pressed="false">Side profile</button>
             </div>
@@ -149,6 +150,11 @@
               <option value="change">Baseline change</option>
               <option value="prevalence">Change prevalence</option>
             </select>
+            <select data-id="surface-mode" aria-label="Surface representation">
+              <option value="relief">Waveform relief</option>
+              <option value="spectrum">Spectral field</option>
+            </select>
+            <label><input data-id="color-off" type="checkbox" />Color off</label>
             <span data-id="renderer-state"></span>
           </div>
           <div data-id="stage">
@@ -558,10 +564,22 @@
           account or cloud AI is needed by this application.
         </p>
         <p>
-          Live surface shows the latest two-second analysis window. Signed displacement uses the
-          newest reconstructed sample relative to the window mean. Spectral light updates every half
-          second; motion is not a playback of every EEG cycle. One surface shows the strongest band.
-          Select a band to inspect its spatial pattern on its own.
+          Waveform relief folds a two-second waveform onto each displayed derivation. Peaks rise;
+          negative deflections sink relative to that window's mean. A bipolar strip runs from its
+          first electrode to its second; a referential patch runs front to back. Along each strip is
+          time, not propagation through the brain. The dark dome is an orientation guide. Updates
+          arrive every half second without blending different waveform cycles together. Color off
+          reveals shape through lighting. The amplitude ruler changes relief depth; extreme
+          deflections are capped. Select one channel to separate overlapping strips.
+        </p>
+        <p>
+          Recent stack shows up to six nonoverlapping retained windows, oldest at left. Whole
+          history and Side profile show representative windows selected for sharp candidates, then
+          amplitude; these are examples, not averages or a continuous waveform archive. Compressed
+          intervals can omit other shapes. The selected interval's example time appears beneath the
+          time slider. Choose Spectral field for power summaries or a baseline map. Band selection
+          colors relief; it does not filter its waveform. Older saved sessions may have no waveform
+          relief.
         </p>
         <p>
           Whole history places older intervals outward. Side profile spreads them along an axis.
@@ -587,8 +605,8 @@
         <p>
           Quantitative history compresses for the overview, preserving peaks, valid duration and
           gaps. Optional local storage retains the original quantitative frames for detailed time
-          selection; it does not archive waveform screenshots or the original recording. Browser
-          storage can be cleared or exhausted.
+          selection, including bounded waveform samples when available; it does not archive waveform
+          screenshots or the original recording. Browser storage can be cleared or exhausted.
         </p>
       </dialog>
     </template>

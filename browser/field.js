@@ -13,6 +13,7 @@ import {
   normalize,
 } from './field-math.js';
 import { POSITIONS, parseDerivation } from './montage.js';
+import { reliefGeometry } from './waveform.js';
 
 const vertex =
   'attribute float intensity; attribute float coverage; attribute float affected; varying float vI; varying float vC; varying float vA; varying vec3 vColor; varying vec3 vLocal; void main(){vI=intensity;vC=coverage;vA=affected;vColor=color;vLocal=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
@@ -34,6 +35,7 @@ export class FluidField {
     this.grid = scalpGrid(24, 40);
     this.meshes = [];
     this.glyphs = [];
+    this.reliefs = [];
     this.weights = new Map();
     this.options = {
       mode: 'live',
@@ -69,6 +71,10 @@ export class FluidField {
       this.renderer.setClearColor('#060c14');
       this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       this.scene = new THREE.Scene();
+      this.scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+      const light = new THREE.DirectionalLight(0xffffff, 2.4);
+      light.position.set(-3, 5, 4);
+      this.scene.add(light);
       this.camera = new THREE.PerspectiveCamera(48, 1, 0.015, 300);
       this.controls = new OrbitControls(this.camera, this.canvas);
       this.controls.enableDamping = true;
@@ -97,6 +103,16 @@ export class FluidField {
           ),
           this.camera,
         );
+        const surfaceHit = this.raycaster.intersectObjects(
+          this.reliefs.filter((m) => m.visible),
+        )[0];
+        if (surfaceHit) {
+          const channel = surfaceHit.object.userData.ranges.find(
+            (r) => surfaceHit.faceIndex < r.end,
+          );
+          if (channel) this.onSelect(channel.name);
+          return;
+        }
         const hit = this.raycaster.intersectObjects(
           this.glyphs.filter((g) => g.visible).map((g) => g.userData.points),
         )[0];
@@ -206,15 +222,84 @@ export class FluidField {
   }
   placement(frame) {
     const o = this.options,
-      total = o.total || 1,
-      mid = (frame.start + frame.end) / 2;
-    const u = timePosition(total - mid, total, total - o.focus, o.lens);
+      start = o.rangeStart || 0,
+      total = Math.max(0.001, (o.total || 1) - start),
+      interval = o.relief && frame.waveform ? frame.waveform : frame,
+      mid = (interval.start + interval.end) / 2 - start,
+      focus = o.focus - start;
+    const u = timePosition(total - mid, total, total - focus, o.lens);
     return {
       u,
-      offset: o.mode === 'side' ? sidePosition(mid, total, o.focus, o.lens) : 0,
-      scale: o.mode === 'side' ? 0.32 : 1,
+      offset: o.mode === 'side' ? sidePosition(mid, total, focus, o.lens) : 0,
+      scale: o.mode === 'side' ? (o.recent ? 0.53 : 0.32) : 1,
       radial: o.mode === 'history' ? 1 + u * 2 : 1,
     };
+  }
+  reliefData(frame, place) {
+    return (frame.waveform?.channels || []).flatMap((c) => {
+      if (this.options.selected && c.name !== this.options.selected) return [];
+      const geometry = reliefGeometry(c, { ...this.options, radial: place.radial });
+      if (!geometry) return [];
+      const strongest = c.bands.indexOf(Math.max(...c.bands));
+      const color = this.options.monochrome
+        ? new THREE.Color('#dbe5ef')
+        : palette[this.options.band >= 0 ? this.options.band : Math.max(0, strongest)];
+      return [{ ...geometry, color, name: c.name, derived: c.status === 'derived' }];
+    });
+  }
+  updateRelief(i, frame, place) {
+    let mesh = this.reliefs[i];
+    if (!mesh) {
+      mesh = new THREE.Mesh(
+        new THREE.BufferGeometry(),
+        new THREE.MeshStandardMaterial({
+          vertexColors: true,
+          roughness: 0.7,
+          metalness: 0.1,
+          side: THREE.DoubleSide,
+          transparent: true,
+        }),
+      );
+      mesh.frustumCulled = false;
+      this.scene.add(mesh);
+      this.reliefs.push(mesh);
+    }
+    const key = [
+      this.options.scale,
+      this.options.cut,
+      this.options.selected,
+      this.options.monochrome,
+      this.options.band,
+      place.radial,
+    ].join('|');
+    if (mesh.userData.window !== frame.waveform || mesh.userData.key !== key) {
+      const positions = [],
+        colors = [],
+        indices = [],
+        ranges = [];
+      for (const part of this.reliefData(frame, place)) {
+        const offset = positions.length / 3;
+        for (const p of part.positions) {
+          positions.push(...p);
+          const dim = part.derived ? 0.6 : 1;
+          colors.push(part.color.r * dim, part.color.g * dim, part.color.b * dim);
+        }
+        for (const j of part.indices) indices.push(j + offset);
+        ranges.push({ name: part.name, end: indices.length / 3 });
+      }
+      mesh.geometry.dispose();
+      mesh.geometry = new THREE.BufferGeometry();
+      mesh.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      mesh.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      mesh.geometry.setIndex(indices);
+      mesh.geometry.computeVertexNormals();
+      mesh.userData = { window: frame.waveform, key, ranges };
+    }
+    mesh.position.set(place.offset, 0, 0);
+    mesh.scale.setScalar(place.scale);
+    mesh.material.opacity = this.options.mode === 'history' ? 0.7 : 1;
+    mesh.material.depthWrite = this.options.mode !== 'history';
+    mesh.visible = Boolean(frame.waveform);
   }
   getMesh(i) {
     if (this.meshes[i]) return this.meshes[i];
@@ -268,7 +353,7 @@ export class FluidField {
       const radial = this.placement(frame).radial;
       const position = base.map((v) => v * (1 + (surface.displacement + 0.012) / radial));
       const color = available
-        ? fieldColor(s)
+        ? (this.options.monochrome ? new THREE.Color('#dbe5ef') : fieldColor(s))
             .clone()
             .multiplyScalar(0.35 + 0.65 * s.amp)
         : new THREE.Color('#637080');
@@ -345,9 +430,10 @@ export class FluidField {
       const mesh = this.getMesh(i),
         attrs = mesh.geometry.attributes,
         place = this.placement(frame),
-        weights = this.weightsFor(frame);
+        weights = o.relief ? null : this.weightsFor(frame);
       const context = [frame.segment, frame.source, o.band, o.selected, o.scale, o.map].join('|');
       const prior =
+        !o.relief &&
         o.mode === 'live' &&
         !this.reduceMotion &&
         mesh.userData.context === context &&
@@ -360,14 +446,18 @@ export class FluidField {
       mesh.scale.setScalar(place.scale);
       for (let j = 0; j < this.grid.vertices.length; j++) {
         const v = this.grid.vertices[j],
-          s = spectralField(weights[j], frame.channels, o);
-        const radial = place.radial + s.displacement;
+          s = o.relief ? {} : spectralField(weights[j], frame.channels, o);
+        const radial = o.relief ? place.radial - 0.2 : place.radial + s.displacement;
         attrs.position.setXYZ(j, v[0] * radial, v[1] * radial, v[2] * radial);
-        const color = fieldColor(s);
+        const color = o.relief
+          ? new THREE.Color('#53677b')
+          : o.monochrome
+            ? new THREE.Color('#dbe5ef')
+            : fieldColor(s);
         attrs.color.setXYZ(j, color.r, color.g, color.b);
-        attrs.intensity.setX(j, s.amp);
-        attrs.coverage.setX(j, s.coverage);
-        attrs.affected.setX(j, s.affected);
+        attrs.intensity.setX(j, o.relief ? 0.5 : s.amp);
+        attrs.coverage.setX(j, o.relief ? 1 : s.coverage);
+        attrs.affected.setX(j, o.relief ? 0 : s.affected);
       }
       Object.values(attrs).forEach((a) => (a.needsUpdate = true));
       mesh.userData.target = prior
@@ -379,10 +469,17 @@ export class FluidField {
       mesh.material.uniforms.opacity.value = o.mode === 'history' ? 0.22 : 0.98;
       mesh.material.depthWrite = o.mode !== 'history';
       mesh.material.uniforms.cut.value = o.cut;
-      this.updateGlyph(i, frame, place);
+      if (o.relief) {
+        this.updateRelief(i, frame, place);
+        if (this.glyphs[i]) this.glyphs[i].visible = false;
+      } else {
+        this.updateGlyph(i, frame, place);
+        if (this.reliefs[i]) this.reliefs[i].visible = false;
+      }
     });
     for (let i = shown.length; i < this.meshes.length; i++) this.meshes[i].visible = false;
     for (let i = shown.length; i < this.glyphs.length; i++) this.glyphs[i].visible = false;
+    for (let i = shown.length; i < this.reliefs.length; i++) this.reliefs[i].visible = false;
     this.makeReference();
   }
   label(text, position, color = '#cbdcea', scale = 0.65) {
@@ -421,7 +518,10 @@ export class FluidField {
   }
   makeReference() {
     const o = this.options,
-      key = o.mode === 'side' ? [o.mode, o.total, o.focus, o.lens].join('|') : o.mode;
+      key =
+        o.mode === 'side'
+          ? [o.mode, o.total, o.focus, o.lens, o.rangeStart, o.recent].join('|')
+          : o.mode;
     if (this.referenceKey === key) return;
     this.referenceKey = key;
     for (const child of [...this.reference.children]) {
@@ -431,7 +531,9 @@ export class FluidField {
       this.reference.remove(child);
     }
     if (o.mode === 'side') {
-      const ticks = sideTicks(o.total, o.focus, o.lens);
+      const start = o.rangeStart || 0,
+        span = Math.max(0.001, o.total - start);
+      const ticks = sideTicks(span, o.focus - start, o.lens);
       this.referenceLine([
         [-4, -0.65, 0],
         [4, -0.65, 0],
@@ -442,9 +544,12 @@ export class FluidField {
           [t.x, -0.72, 0],
         ]);
         if (i === 0 || i === 4)
-          this.label((i === 0 ? 'Start ' : 'Present ') + fieldTime(t.time), [t.x, -0.95, 0]);
+          this.label(
+            (o.recent ? '' : i === 0 ? 'Start ' : 'Present ') + fieldTime(t.time + start),
+            [t.x, -0.95, 0],
+          );
       }
-      const x = sidePosition(o.focus, o.total, o.focus, o.lens);
+      const x = sidePosition(o.focus - start, span, o.focus - start, o.lens);
       this.referenceLine(
         [
           [x, -0.56, 0],
@@ -514,13 +619,17 @@ export class FluidField {
     };
     for (const f of shown) {
       const place = this.placement(f),
-        weights = this.weightsFor(f, grid);
-      const values = weights.map((v) => spectralField(v, f.channels, o));
+        weights = o.relief ? null : this.weightsFor(f, grid);
+      const values = o.relief
+        ? grid.vertices.map(() => ({}))
+        : weights.map((v) => spectralField(v, f.channels, o));
       const pts = grid.vertices.map((v, i) =>
         project(
           v.map(
             (x, j) =>
-              x * (place.radial + values[i].displacement) * place.scale +
+              x *
+                (o.relief ? place.radial - 0.2 : place.radial + values[i].displacement) *
+                place.scale +
               (j === 0 ? place.offset : 0),
           ),
         ),
@@ -528,14 +637,49 @@ export class FluidField {
       for (let i = 0; i < grid.indices.length; i += 3) {
         const ids = grid.indices.slice(i, i + 3),
           s = values[ids[0]];
-        if (s.coverage < 0.08 || ids.some((j) => grid.vertices[j][0] > o.cut)) continue;
+        if (
+          (!o.relief && s.coverage < 0.08) ||
+          ids.some((j) => grid.vertices[j][0] * (o.relief ? place.radial - 0.2 : 1) > o.cut)
+        )
+          continue;
         tris.push({
           p: ids.map((j) => pts[j]),
-          amp: ids.reduce((a, j) => a + values[j].amp, 0) / 3,
-          color: fieldColor(s),
+          amp: o.relief ? 0.3 : ids.reduce((a, j) => a + values[j].amp, 0) / 3,
+          color: o.relief
+            ? new THREE.Color('#53677b')
+            : o.monochrome
+              ? new THREE.Color('#dbe5ef')
+              : fieldColor(s),
           z: ids.reduce((a, j) => a + pts[j][2], 0),
           affected: s.affected,
         });
+      }
+      if (o.relief) {
+        for (const part of this.reliefData(f, place)) {
+          const projected = part.positions.map((v) =>
+            project(v.map((x, j) => x * place.scale + (j === 0 ? place.offset : 0))),
+          );
+          for (let i = 0; i < part.indices.length; i += 3) {
+            const ids = part.indices.slice(i, i + 3),
+              [a, b, c] = ids.map((j) => part.positions[j]);
+            const u = b.map((x, j) => x - a[j]),
+              v = c.map((x, j) => x - a[j]);
+            const n = normalize([
+              u[1] * v[2] - u[2] * v[1],
+              u[2] * v[0] - u[0] * v[2],
+              u[0] * v[1] - u[1] * v[0],
+            ]);
+            const shade = 0.3 + 0.7 * Math.abs(-0.424 * n[0] + 0.707 * n[1] + 0.566 * n[2]);
+            tris.push({
+              p: ids.map((j) => projected[j]),
+              z: ids.reduce((s, j) => s + projected[j][2], 0),
+              amp: shade * (part.derived ? 0.6 : 1),
+              color: part.color,
+              relief: true,
+            });
+          }
+        }
+        continue;
       }
       const data = this.glyphData(f);
       const transform = (v) =>
@@ -545,7 +689,7 @@ export class FluidField {
     tris
       .sort((a, b) => a.z - b.z)
       .forEach((t) => {
-        ctx.globalAlpha = o.mode === 'history' ? 0.18 : 1;
+        ctx.globalAlpha = o.mode === 'history' ? (t.relief ? 0.7 : 0.18) : 1;
         ctx.fillStyle = t.color
           .clone()
           .multiplyScalar(0.06 + 0.8 * t.amp)
@@ -554,9 +698,11 @@ export class FluidField {
         t.p.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
         ctx.closePath();
         ctx.fill();
-        ctx.globalAlpha = o.mode === 'history' ? 0.15 : 0.3;
-        ctx.strokeStyle = '#08131d';
-        ctx.stroke();
+        if (!t.relief) {
+          ctx.globalAlpha = o.mode === 'history' ? 0.15 : 0.3;
+          ctx.strokeStyle = '#08131d';
+          ctx.stroke();
+        }
       });
     ctx.globalAlpha = 1;
     const d = Math.min(devicePixelRatio || 1, 2);
@@ -589,13 +735,19 @@ export class FluidField {
       ctx.fillText(text, q[0], q[1]);
     };
     if (o.mode === 'side') {
+      const start = o.rangeStart || 0,
+        span = Math.max(0.001, o.total - start);
       line([-4, -0.65, 0], [4, -0.65, 0], '#829aaa');
-      sideTicks(o.total, o.focus, o.lens).forEach((t, i) => {
+      sideTicks(span, o.focus - start, o.lens).forEach((t, i) => {
         line([t.x, -0.6, 0], [t.x, -0.72, 0], '#829aaa');
         if (i === 0 || i === 4)
-          label((i === 0 ? 'Start ' : 'Present ') + fieldTime(t.time), [t.x, -0.95, 0]);
+          label((o.recent ? '' : i === 0 ? 'Start ' : 'Present ') + fieldTime(t.time + start), [
+            t.x,
+            -0.95,
+            0,
+          ]);
       });
-      const x = sidePosition(o.focus, o.total, o.focus, o.lens);
+      const x = sidePosition(o.focus - start, span, o.focus - start, o.lens);
       line([x, -0.56, 0], [x, -0.77, 0], '#ffffff');
     } else
       for (const [text, p] of [

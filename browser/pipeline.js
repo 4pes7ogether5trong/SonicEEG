@@ -1,6 +1,7 @@
 import { analyze, amplitudeHistogram } from './signal.js';
 import { derive } from './montage.js';
 import { transientFeatures } from './patterns.js';
+import { waveformSnapshot } from './waveform.js';
 export class FeaturePipeline {
   constructor(onFrame) {
     this.onFrame = onFrame;
@@ -28,10 +29,7 @@ export class FeaturePipeline {
         leaves: 1,
       });
   }
-  ingest(
-    block,
-    { settings = {}, segment = '0', source = 'screen', expected = [] } = {},
-  ) {
+  ingest(block, { settings = {}, segment = '0', source = 'screen', expected = [] } = {}) {
     if (this.segment !== segment || this.rate !== block.rate) {
       this.reset();
       this.segment = segment;
@@ -77,14 +75,13 @@ export class FeaturePipeline {
     }
     const channels = rows.map((c) => {
       const f =
-        c.valid === false
-          ? { valid: false, bands: [] }
-          : analyze(c.samples, rate, settings);
-      const transients = f.valid && c.status === 'observed'
-        ? transientFeatures(c.samples, rate, c.start)
-        : { available: false, events: [] };
+        c.valid === false ? { valid: false, bands: [] } : analyze(c.samples, rate, settings);
+      const transients =
+        f.valid && c.status === 'observed'
+          ? transientFeatures(c.samples, rate, c.start)
+          : { available: false, events: [] };
       const priorSharp = this.sharpSeen.get(c.name) ?? -Infinity;
-      const newSharp = transients.events.filter(e => e.time > priorSharp + .09);
+      const newSharp = transients.events.filter((e) => e.time > priorSharp + 0.09);
       if (newSharp.length) this.sharpSeen.set(c.name, newSharp.at(-1).time);
       return {
         name: c.name,
@@ -96,9 +93,7 @@ export class FeaturePipeline {
         sharpValidSeconds: transients.available ? end - start : 0,
         quality: c.quality ?? 1,
         validSeconds: f.valid ? end - start : 0,
-        amplitudeHistogram: f.valid
-          ? amplitudeHistogram(f.bands, end - start)
-          : null,
+        amplitudeHistogram: f.valid ? amplitudeHistogram(f.bands, end - start) : null,
       };
     });
     if (end > start)
@@ -109,6 +104,7 @@ export class FeaturePipeline {
         segment,
         source,
         channels,
+        waveform: waveformSnapshot(rows, channels, end - 2, rate),
         gaps: 0,
         leaves: 1,
         rate,
