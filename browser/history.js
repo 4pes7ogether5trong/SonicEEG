@@ -1,3 +1,4 @@
+import { mergeBaseline } from './baseline.js';
 export function mergeBins(a, b) {
   const mixed = a.mixed || b.mixed || a.segment !== b.segment,
     start = a.start,
@@ -13,6 +14,7 @@ export function mergeBins(a, b) {
       status: x?.status === y?.status ? x.status : 'mixed',
       valid: validSeconds > 0 && !mixed,
       validSeconds,
+      baseline: mergeBaseline(x?.baseline, y?.baseline),
       sharpCount: (x?.sharpCount || 0) + (y?.sharpCount || 0),
       sharpValidSeconds: (x?.sharpValidSeconds || 0) + (y?.sharpValidSeconds || 0),
       rms: Math.sqrt(
@@ -28,10 +30,7 @@ export function mergeBins(a, b) {
           vw,
       ),
       peakBands: Array.from({ length: 5 }, (_, i) =>
-        Math.max(
-          x?.peakBands?.[i] ?? x?.bands?.[i] ?? 0,
-          y?.peakBands?.[i] ?? y?.bands?.[i] ?? 0,
-        ),
+        Math.max(x?.peakBands?.[i] ?? x?.bands?.[i] ?? 0, y?.peakBands?.[i] ?? y?.bands?.[i] ?? 0),
       ),
       amplitudeHistogram: Array.from({ length: 5 }, (_, i) => {
         const bins = { ...x?.amplitudeHistogram?.[i] };
@@ -42,10 +41,7 @@ export function mergeBins(a, b) {
       min: Math.min(x?.min ?? 0, y?.min ?? 0),
       max: Math.max(x?.max ?? 0, y?.max ?? 0),
       last: y?.last ?? 0,
-      affected: Array.from(
-        { length: 5 },
-        (_, i) => !!(x?.affected?.[i] || y?.affected?.[i]),
-      ),
+      affected: Array.from({ length: 5 }, (_, i) => !!(x?.affected?.[i] || y?.affected?.[i])),
       unknownFilters: x?.unknownFilters || y?.unknownFilters,
       peakHz: y?.peakHz ?? x?.peakHz ?? 0,
       quality: Math.min(x?.quality ?? 0, y?.quality ?? 0),
@@ -82,8 +78,7 @@ export class TemporalHistory {
     this.source = null;
   }
   add(frame) {
-    if (frame.start < this.end - 1e-5)
-      throw new Error('History cannot overlap or run backwards');
+    if (frame.start < this.end - 1e-5) throw new Error('History cannot overlap or run backwards');
     this.end = frame.end;
     this.count++;
     this.levels[0].push(frame);
@@ -91,10 +86,7 @@ export class TemporalHistory {
   }
   compact(level) {
     if (this.levels[level].length <= this.capacity) return;
-    const merged = mergeBins(
-      this.levels[level].shift(),
-      this.levels[level].shift(),
-    );
+    const merged = mergeBins(this.levels[level].shift(), this.levels[level].shift());
     this.levels[level + 1] ??= [];
     this.levels[level + 1].push(merged);
     this.compact(level + 1);
@@ -103,10 +95,7 @@ export class TemporalHistory {
     return this.levels.flat().sort((a, b) => a.start - b.start);
   }
   select(time) {
-    return (
-      this.bins().find((f) => f.start <= time && f.end > time) ||
-      this.bins().at(-1)
-    );
+    return this.bins().find((f) => f.start <= time && f.end > time) || this.bins().at(-1);
   }
   overview(limit = 16) {
     return summarizeFrames(this.bins(), limit);
@@ -118,14 +107,14 @@ export class TemporalHistory {
         f.channels.forEach((c) => {
           c.valid = false;
           c.validSeconds = 0;
+          c.baseline = null;
         });
       }
   }
 }
 export class LocalArchive {
   async open() {
-    if (!globalThis.indexedDB)
-      throw new Error('Local browser storage unavailable');
+    if (!globalThis.indexedDB) throw new Error('Local browser storage unavailable');
     this.db = await new Promise((resolve, reject) => {
       const r = indexedDB.open('soniceeg-local-v2', 1);
       r.onupgradeneeded = () => {
@@ -152,9 +141,7 @@ export class LocalArchive {
     const id = crypto.randomUUID();
     this.id = id;
     await this.transaction(['sessions'], 'readwrite', (tx) =>
-      tx
-        .objectStore('sessions')
-        .put({ id, created: Date.now(), source, end: 0 }),
+      tx.objectStore('sessions').put({ id, created: Date.now(), source, end: 0 }),
     );
     return id;
   }
@@ -166,12 +153,8 @@ export class LocalArchive {
   }
   async sessions() {
     return new Promise((resolve, reject) => {
-      const r = this.db
-        .transaction('sessions')
-        .objectStore('sessions')
-        .getAll();
-      r.onsuccess = () =>
-        resolve(r.result.sort((a, b) => b.created - a.created));
+      const r = this.db.transaction('sessions').objectStore('sessions').getAll();
+      r.onsuccess = () => resolve(r.result.sort((a, b) => b.created - a.created));
       r.onerror = () => reject(r.error);
     });
   }
@@ -182,10 +165,7 @@ export class LocalArchive {
           [session, start],
           [session, Number.isFinite(end) ? end : Number.MAX_VALUE],
         );
-      const r = this.db
-        .transaction('frames')
-        .objectStore('frames')
-        .openCursor(range);
+      const r = this.db.transaction('frames').objectStore('frames').openCursor(range);
       r.onsuccess = () => {
         const c = r.result;
         if (c) {
@@ -218,10 +198,7 @@ export class LocalArchive {
       const r = tx
         .objectStore('frames')
         .openCursor(
-          IDBKeyRange.bound(
-            [session, Math.max(0, time - 2)],
-            [session, Number.MAX_VALUE],
-          ),
+          IDBKeyRange.bound([session, Math.max(0, time - 2)], [session, Number.MAX_VALUE]),
         );
       r.onsuccess = () => {
         const c = r.result;
@@ -232,6 +209,7 @@ export class LocalArchive {
             f.channels.forEach((x) => {
               x.valid = false;
               x.validSeconds = 0;
+              x.baseline = null;
             });
             c.update(f);
           }
@@ -243,10 +221,7 @@ export class LocalArchive {
   async erase(session) {
     await this.transaction(['sessions', 'frames'], 'readwrite', (tx) => {
       tx.objectStore('sessions').delete(session);
-      const r = tx
-        .objectStore('frames')
-        .index('session')
-        .openCursor(IDBKeyRange.only(session));
+      const r = tx.objectStore('frames').index('session').openCursor(IDBKeyRange.only(session));
       r.onsuccess = () => {
         const c = r.result;
         if (c) {

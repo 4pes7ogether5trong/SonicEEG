@@ -2,281 +2,608 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { FlyControls } from 'three/addons/controls/FlyControls.js';
 import { BANDS } from './signal.js';
-import { scalpGrid, fieldWeights, spectralField, sampleField, timePosition, sidePosition, sideTicks, fieldTime, normalize } from './field-math.js';
+import {
+  scalpGrid,
+  fieldWeights,
+  spectralField,
+  timePosition,
+  sidePosition,
+  sideTicks,
+  fieldTime,
+  normalize,
+} from './field-math.js';
 import { POSITIONS, parseDerivation } from './montage.js';
 
-const vertex = 'attribute float intensity; attribute float coverage; attribute float affected; varying float vI; varying float vC; varying float vA; varying vec3 vColor; varying vec3 vLocal; void main(){vI=intensity;vC=coverage;vA=affected;vColor=color;vLocal=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
-const fragment = 'precision highp float; uniform float opacity; uniform float cut; varying float vI; varying float vC; varying float vA; varying vec3 vColor; varying vec3 vLocal; void main(){if(vLocal.x>cut||vC<.08)discard;float contour=smoothstep(.07,.14,abs(fract(vI*9.)-.5));float shade=.58+.42*max(0.,dot(normalize(vLocal),normalize(vec3(-.4,1.,.7))));float hatch=vA>.3?(.55+.45*step(.4,fract((gl_FragCoord.x+gl_FragCoord.y)/9.))):1.;vec3 col=vColor*(.14+.86*vI)*shade*(.6+.4*contour)*hatch;gl_FragColor=vec4(col,opacity);}';
-const dotVertex = 'attribute float size; attribute float ring; varying vec3 vColor; varying float vRing; uniform float pixelRatio; void main(){vColor=color;vRing=ring;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);gl_PointSize=size*pixelRatio;}';
-const dotFragment = 'precision highp float; varying vec3 vColor; varying float vRing; void main(){float r=length(gl_PointCoord-.5);if(r>.5)discard;if(vRing<0.&&r<.32)discard;vec3 c=vRing>0.&&r>.32?vec3(1.):vColor;gl_FragColor=vec4(c,1.);}';
-const palette = BANDS.map(b => new THREE.Color(b.color));
+const vertex =
+  'attribute float intensity; attribute float coverage; attribute float affected; varying float vI; varying float vC; varying float vA; varying vec3 vColor; varying vec3 vLocal; void main(){vI=intensity;vC=coverage;vA=affected;vColor=color;vLocal=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
+const fragment =
+  'precision highp float; uniform float opacity; uniform float cut; varying float vI; varying float vC; varying float vA; varying vec3 vColor; varying vec3 vLocal; void main(){if(vLocal.x>cut||vC<.08)discard;float contour=smoothstep(.07,.14,abs(fract(vI*9.)-.5));float shade=.58+.42*max(0.,dot(normalize(vLocal),normalize(vec3(-.4,1.,.7))));float hatch=vA>.3?(.55+.45*step(.4,fract((gl_FragCoord.x+gl_FragCoord.y)/9.))):1.;vec3 col=vColor*(.14+.86*vI)*shade*(.6+.4*contour)*hatch;gl_FragColor=vec4(col,opacity);}';
+const dotVertex =
+  'attribute float size; attribute float ring; varying vec3 vColor; varying float vRing; uniform float pixelRatio; void main(){vColor=color;vRing=ring;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);gl_PointSize=size*pixelRatio;}';
+const dotFragment =
+  'precision highp float; varying vec3 vColor; varying float vRing; void main(){float r=length(gl_PointCoord-.5);if(r>.5)discard;if(vRing<0.&&r<.32)discard;vec3 c=vRing>0.&&r>.32?vec3(1.):vColor;gl_FragColor=vec4(c,1.);}';
+const palette = BANDS.map((b) => new THREE.Color(b.color));
+const decrease = new THREE.Color('#409fff'),
+  increase = new THREE.Color('#ff963e');
+const fieldColor = (s) => (s.heat == null ? palette[s.band] : s.heat < 0 ? decrease : increase);
 
 export class FluidField {
   constructor(container, onSelect, onStatus) {
-    this.container=container; this.onSelect=onSelect;
-    this.grid=scalpGrid(24,40); this.meshes=[]; this.glyphs=[]; this.weights=new Map();
-    this.options={mode:'live',band:-1,scale:80,lens:.5,cut:20,focus:0,selected:'',peaks:false};
-    this.canvas=document.createElement('canvas');
-    this.canvas.setAttribute('aria-label','EEG frequency field. Drag to rotate, scroll to zoom. Colored bars show channel band amplitude; white rings mark sharp candidates.');
+    this.container = container;
+    this.onSelect = onSelect;
+    this.grid = scalpGrid(24, 40);
+    this.meshes = [];
+    this.glyphs = [];
+    this.weights = new Map();
+    this.options = {
+      mode: 'live',
+      band: -1,
+      scale: 80,
+      lens: 0.5,
+      cut: 20,
+      focus: 0,
+      selected: '',
+      peaks: false,
+    };
+    this.canvas = document.createElement('canvas');
+    this.canvas.setAttribute(
+      'aria-label',
+      'EEG scalp field. Drag to rotate, scroll to zoom. Surface markers show displayed channels; white rings mark sharp candidates.',
+    );
     container.prepend(this.canvas);
-    try { this.renderer=new THREE.WebGLRenderer({canvas:this.canvas,antialias:true}); }
-    catch {
-      this.canvas.remove(); this.canvas=document.createElement('canvas'); container.prepend(this.canvas);
-      this.software=this.canvas.getContext('2d'); this.yaw=.4;this.pitch=.6;this.zoom=1;
-      this.softwareControls();onStatus('Software field');
+    try {
+      this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
+    } catch {
+      this.canvas.remove();
+      this.canvas = document.createElement('canvas');
+      container.prepend(this.canvas);
+      this.software = this.canvas.getContext('2d');
+      this.yaw = 0.4;
+      this.pitch = 0.6;
+      this.zoom = 1;
+      this.softwareControls();
+      onStatus('Software field');
     }
-    if(this.renderer) {
-      this.renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-      this.renderer.setClearColor('#060c14'); this.renderer.outputColorSpace=THREE.LinearSRGBColorSpace;
-      this.scene=new THREE.Scene();this.camera=new THREE.PerspectiveCamera(48,1,.015,300);
-      this.controls=new OrbitControls(this.camera,this.canvas);this.controls.enableDamping=true;
-      this.controls.minDistance=.15;this.controls.maxDistance=60;
-      this.fly=new FlyControls(this.camera,this.canvas);this.fly.movementSpeed=2;this.fly.rollSpeed=.35;
-      this.fly.dragToLook=true;this.fly.enabled=false;
-      this.reference=new THREE.Group();this.scene.add(this.reference);
-      this.raycaster=new THREE.Raycaster();
-      this.canvas.addEventListener('pointerdown',e=>{this.down=[e.clientX,e.clientY];});
-      this.canvas.addEventListener('pointerup',e=>{
-        if(!this.down||Math.hypot(e.clientX-this.down[0],e.clientY-this.down[1])>4)return;
-        const r=this.canvas.getBoundingClientRect();
-        this.raycaster.params.Points.threshold=.08;
-        this.raycaster.setFromCamera(new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),this.camera);
-        const hit=this.raycaster.intersectObjects(this.glyphs.filter(g=>g.visible).map(g=>g.userData.points))[0];
-        if(hit) this.onSelect(hit.object.userData.names[hit.index]);
+    if (this.renderer) {
+      this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      this.renderer.setClearColor('#060c14');
+      this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+      this.scene = new THREE.Scene();
+      this.camera = new THREE.PerspectiveCamera(48, 1, 0.015, 300);
+      this.controls = new OrbitControls(this.camera, this.canvas);
+      this.controls.enableDamping = true;
+      this.controls.minDistance = 0.15;
+      this.controls.maxDistance = 60;
+      this.fly = new FlyControls(this.camera, this.canvas);
+      this.fly.movementSpeed = 2;
+      this.fly.rollSpeed = 0.35;
+      this.fly.dragToLook = true;
+      this.fly.enabled = false;
+      this.reference = new THREE.Group();
+      this.scene.add(this.reference);
+      this.raycaster = new THREE.Raycaster();
+      this.canvas.addEventListener('pointerdown', (e) => {
+        this.down = [e.clientX, e.clientY];
       });
-      this.reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
-      let last=performance.now();
-      this.renderer.setAnimationLoop(now=>{
-        const dt=Math.min(.05,(now-last)/1000);last=now;
-        if(document.hidden||this.visible===false)return;
+      this.canvas.addEventListener('pointerup', (e) => {
+        if (!this.down || Math.hypot(e.clientX - this.down[0], e.clientY - this.down[1]) > 4)
+          return;
+        const r = this.canvas.getBoundingClientRect();
+        this.raycaster.params.Points.threshold = 0.08;
+        this.raycaster.setFromCamera(
+          new THREE.Vector2(
+            ((e.clientX - r.left) / r.width) * 2 - 1,
+            (-(e.clientY - r.top) / r.height) * 2 + 1,
+          ),
+          this.camera,
+        );
+        const hit = this.raycaster.intersectObjects(
+          this.glyphs.filter((g) => g.visible).map((g) => g.userData.points),
+        )[0];
+        if (hit) this.onSelect(hit.object.userData.names[hit.index]);
+      });
+      this.reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let last = performance.now();
+      this.renderer.setAnimationLoop((now) => {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        if (document.hidden || this.visible === false) return;
         this.settle(dt);
-        this.fly.enabled?this.fly.update(dt):this.controls.update();
-        this.renderer.render(this.scene,this.camera);
+        this.fly.enabled ? this.fly.update(dt) : this.controls.update();
+        this.renderer.render(this.scene, this.camera);
       });
       onStatus('Frequency field');
     }
-    new ResizeObserver(()=>this.resize()).observe(container);
-    this.home();this.resize();
+    new ResizeObserver(() => this.resize()).observe(container);
+    this.home();
+    this.resize();
   }
   resize() {
-    const w=this.container.clientWidth,h=this.container.clientHeight;if(!w||!h)return;
-    if(this.renderer){this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.sizeLabels();}
-    else{const d=Math.min(devicePixelRatio||1,2);this.canvas.width=Math.round(w*d);this.canvas.height=Math.round(h*d);this.drawSoftware();}
+    const w = this.container.clientWidth,
+      h = this.container.clientHeight;
+    if (!w || !h) return;
+    if (this.renderer) {
+      this.renderer.setSize(w, h, false);
+      this.camera.aspect = w / h;
+      this.camera.updateProjectionMatrix();
+      this.sizeLabels();
+    } else {
+      const d = Math.min(devicePixelRatio || 1, 2);
+      this.canvas.width = Math.round(w * d);
+      this.canvas.height = Math.round(h * d);
+      this.drawSoftware();
+    }
   }
   home() {
-    if(this.camera){this.camera.position.set(3,2.8,4.6);this.controls.target.set(0,.35,0);this.camera.lookAt(this.controls.target);}
-    else{this.yaw=.4;this.pitch=.6;this.zoom=1;this.drawSoftware();}
+    if (this.camera) {
+      this.camera.position.set(3, 2.8, 4.6);
+      this.controls.target.set(0, 0.35, 0);
+      this.camera.lookAt(this.controls.target);
+    } else {
+      this.yaw = 0.4;
+      this.pitch = 0.6;
+      this.zoom = 1;
+      this.drawSoftware();
+    }
   }
   side() {
-    if(this.camera){this.camera.position.set(0,3.2,10.8);this.controls.target.set(0,0,0);this.camera.lookAt(this.controls.target);}
-    else{this.yaw=0;this.pitch=.35;this.zoom=1;this.drawSoftware();}
+    if (this.camera) {
+      this.camera.position.set(0, 3.2, 10.8);
+      this.controls.target.set(0, 0, 0);
+      this.camera.lookAt(this.controls.target);
+    } else {
+      this.yaw = 0;
+      this.pitch = 0.35;
+      this.zoom = 1;
+      this.drawSoftware();
+    }
   }
-  enter(enabled){if(this.fly){this.fly.enabled=enabled;this.controls.enabled=!enabled;}}
-  lens(fov){if(this.camera){this.camera.fov=Number(fov);this.camera.updateProjectionMatrix();this.sizeLabels();}}
-  weightsFor(frame,grid=this.grid) {
-    const key=grid.vertices.length+':'+frame.channels.map(c=>c.name).join('|');
-    if(!this.weights.has(key)){
-      if(this.weights.size>32)this.weights.clear();
-      this.weights.set(key,fieldWeights(grid.vertices,frame.channels.map(c=>c.name)));
+  enter(enabled) {
+    if (this.fly) {
+      this.fly.enabled = enabled;
+      this.controls.enabled = !enabled;
+    }
+  }
+  lens(fov) {
+    if (this.camera) {
+      this.camera.fov = Number(fov);
+      this.camera.updateProjectionMatrix();
+      this.sizeLabels();
+    }
+  }
+  weightsFor(frame, grid = this.grid) {
+    const key = grid.vertices.length + ':' + frame.channels.map((c) => c.name).join('|');
+    if (!this.weights.has(key)) {
+      if (this.weights.size > 32) this.weights.clear();
+      this.weights.set(
+        key,
+        fieldWeights(
+          grid.vertices,
+          frame.channels.map((c) => c.name),
+        ),
+      );
     }
     return this.weights.get(key);
   }
   settle(dt) {
-    const blend=1-Math.exp(-dt/.05);
-    for(const mesh of this.meshes) {
-      const target=mesh.userData.target;if(!mesh.visible||!target)continue;
-      let error=0;
-      for(const name of ['position','intensity']) {
-        const attr=mesh.geometry.attributes[name],data=attr.array;
-        for(let i=0;i<data.length;i++){const delta=target[name][i]-data[i];data[i]+=delta*blend;error=Math.max(error,Math.abs(delta));}
-        attr.needsUpdate=true;
+    const blend = 1 - Math.exp(-dt / 0.05);
+    for (const mesh of this.meshes) {
+      const target = mesh.userData.target;
+      if (!mesh.visible || !target) continue;
+      let error = 0;
+      for (const name of ['position', 'intensity']) {
+        const attr = mesh.geometry.attributes[name],
+          data = attr.array;
+        for (let i = 0; i < data.length; i++) {
+          const delta = target[name][i] - data[i];
+          data[i] += delta * blend;
+          error = Math.max(error, Math.abs(delta));
+        }
+        attr.needsUpdate = true;
       }
-      if(error<.0001)mesh.userData.target=null;
+      if (error < 0.0001) mesh.userData.target = null;
     }
   }
   placement(frame) {
-    const o=this.options,total=o.total||1,mid=(frame.start+frame.end)/2;
-    const u=timePosition(total-mid,total,total-o.focus,o.lens);
-    return {u, offset:o.mode==='side'?sidePosition(mid,total,o.focus,o.lens):0,
-      scale:o.mode==='side'?.32:1, radial:o.mode==='history'?1+u*2:1};
+    const o = this.options,
+      total = o.total || 1,
+      mid = (frame.start + frame.end) / 2;
+    const u = timePosition(total - mid, total, total - o.focus, o.lens);
+    return {
+      u,
+      offset: o.mode === 'side' ? sidePosition(mid, total, o.focus, o.lens) : 0,
+      scale: o.mode === 'side' ? 0.32 : 1,
+      radial: o.mode === 'history' ? 1 + u * 2 : 1,
+    };
   }
   getMesh(i) {
-    if(this.meshes[i])return this.meshes[i];
-    const g=new THREE.BufferGeometry(),n=this.grid.vertices.length;
-    for(const [attr,size] of [['position',3],['color',3],['intensity',1],['coverage',1],['affected',1]])
-      g.setAttribute(attr,new THREE.BufferAttribute(new Float32Array(n*size),size));
+    if (this.meshes[i]) return this.meshes[i];
+    const g = new THREE.BufferGeometry(),
+      n = this.grid.vertices.length;
+    for (const [attr, size] of [
+      ['position', 3],
+      ['color', 3],
+      ['intensity', 1],
+      ['coverage', 1],
+      ['affected', 1],
+    ])
+      g.setAttribute(attr, new THREE.BufferAttribute(new Float32Array(n * size), size));
     g.setIndex(this.grid.indices);
-    const mat=new THREE.ShaderMaterial({vertexShader:vertex,fragmentShader:fragment,vertexColors:true,
-      uniforms:{opacity:{value:1},cut:{value:20}},side:THREE.DoubleSide,transparent:true,depthWrite:true});
-    const mesh=new THREE.Mesh(g,mat);mesh.frustumCulled=false;this.scene.add(mesh);this.meshes.push(mesh);return mesh;
+    const mat = new THREE.ShaderMaterial({
+      vertexShader: vertex,
+      fragmentShader: fragment,
+      vertexColors: true,
+      uniforms: { opacity: { value: 1 }, cut: { value: 20 } },
+      side: THREE.DoubleSide,
+      transparent: true,
+      depthWrite: true,
+    });
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.frustumCulled = false;
+    this.scene.add(mesh);
+    this.meshes.push(mesh);
+    return mesh;
   }
   glyphData(frame) {
-    const points=[],lines=[],names=[];
-    for(const c of frame.channels) {
-      if(this.options.selected&&c.name!==this.options.selected)continue;
-      const d=parseDerivation(c.name);if(!d)continue;
-      const a=POSITIONS[d.a],b=d.bipolar?POSITIONS[d.b]:a;
-      const p=normalize(a.map((v,i)=>(v+b[i])/2));
-      const tangent=normalize(Math.abs(p[1])>.95?[1,0,0]:[p[2],0,-p[0]]);
-      const bands=this.options.band>=0?[this.options.band]:[0,1,2,3,4];
-      const strongest=c.bands?.indexOf(Math.max(...c.bands))??0;
-      for(const band of bands) {
-        const s=sampleField([{weight:1,signed:0}],[c],band,this.options.scale,this.options.peaks,'',this.options.threshold);
-        const start=p.map((v,i)=>v*1.34+tangent[i]*(band-2)*.075);
-        const end=start.map((v,i)=>v+p[i]*(.035+s.amp*.4));
-        const color=c.valid?palette[band].clone().multiplyScalar(.35+.65*s.amp):new THREE.Color('#637080');
-        const event=c.valid&&c.status!=='derived'&&(
-          this.options.mode==='live'
-            ? c.transients?.events?.some(e=>e.time>=frame.end-.65)
-            : c.sharpCount>0);
-        points.push({position:end,color,size:(c.valid?4+5*s.amp:5)*(this.options.mode==='live'?1:.45),ring:!c.valid?-1:event&&(bands.length===1||band===strongest)?1:0});
-        lines.push({start,end,color});names.push(c.name);
-      }
+    const points = [],
+      names = [];
+    for (const c of frame.channels) {
+      if (this.options.selected && c.name !== this.options.selected) continue;
+      const d = parseDerivation(c.name);
+      if (!d) continue;
+      const a = POSITIONS[d.a],
+        b = d.bipolar ? POSITIONS[d.b] : a;
+      const p = normalize(a.map((v, i) => (v + b[i]) / 2));
+      const base = [p[0], p[1] * 0.88, p[2] * 1.12];
+      const surface = spectralField(
+        fieldWeights(
+          [base],
+          frame.channels.map((c) => c.name),
+        )[0],
+        frame.channels,
+        this.options,
+      );
+      const s = spectralField([{ weight: 1, signed: 0 }], [c], this.options);
+      const available = c.valid && s.coverage > 0;
+      const radial = this.placement(frame).radial;
+      const position = base.map((v) => v * (1 + (surface.displacement + 0.012) / radial));
+      const color = available
+        ? fieldColor(s)
+            .clone()
+            .multiplyScalar(0.35 + 0.65 * s.amp)
+        : new THREE.Color('#637080');
+      const event =
+        available &&
+        c.status !== 'derived' &&
+        (this.options.mode === 'live'
+          ? c.transients?.events?.some((e) => e.time >= frame.end - 0.65)
+          : c.sharpCount > 0);
+      points.push({
+        position,
+        color,
+        size: (available ? 5 + 3 * s.amp : 5) * (this.options.mode === 'live' ? 1 : 0.6),
+        ring: !available ? -1 : event ? 1 : 0,
+      });
+      names.push(c.name);
     }
-    return {points,lines,names};
+    return { points, names };
   }
-  updateGlyph(i,frame,placement) {
-    let group=this.glyphs[i];
-    if(!group) {
-      group=new THREE.Group();
-      const dots=new THREE.Points(new THREE.BufferGeometry(),new THREE.ShaderMaterial({
-        vertexShader:dotVertex,fragmentShader:dotFragment,vertexColors:true,
-        uniforms:{pixelRatio:{value:Math.min(devicePixelRatio,2)}}}));
-      const bars=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({vertexColors:true}));
-      group.add(bars,dots);group.userData={points:dots,bars};this.scene.add(group);this.glyphs.push(group);
+  updateGlyph(i, frame, placement) {
+    let group = this.glyphs[i];
+    if (!group) {
+      group = new THREE.Group();
+      const dots = new THREE.Points(
+        new THREE.BufferGeometry(),
+        new THREE.ShaderMaterial({
+          vertexShader: dotVertex,
+          fragmentShader: dotFragment,
+          vertexColors: true,
+          uniforms: { pixelRatio: { value: Math.min(devicePixelRatio, 2) } },
+        }),
+      );
+      group.add(dots);
+      group.userData = { points: dots };
+      this.scene.add(group);
+      this.glyphs.push(group);
     }
-    const data=this.glyphData(frame),dots=group.userData.points,bars=group.userData.bars;
-    const pos=[],colors=[],sizes=[],rings=[],lp=[],lc=[];
-    for(const p of data.points){pos.push(...p.position);colors.push(p.color.r,p.color.g,p.color.b);sizes.push(p.size);rings.push(p.ring);}
-    for(const l of data.lines){lp.push(...l.start,...l.end);lc.push(l.color.r,l.color.g,l.color.b,l.color.r,l.color.g,l.color.b);}
-    dots.geometry.dispose();dots.geometry=new THREE.BufferGeometry();
-    for(const [k,v,n] of [['position',pos,3],['color',colors,3],['size',sizes,1],['ring',rings,1]])
-      dots.geometry.setAttribute(k,new THREE.Float32BufferAttribute(v,n));
-    dots.userData.names=data.names;
-    bars.geometry.dispose();bars.geometry=new THREE.BufferGeometry();
-    bars.geometry.setAttribute('position',new THREE.Float32BufferAttribute(lp,3));
-    bars.geometry.setAttribute('color',new THREE.Float32BufferAttribute(lc,3));
-    group.position.set(placement.offset,0,0);group.scale.setScalar(placement.scale*placement.radial);group.visible=true;
+    const data = this.glyphData(frame),
+      dots = group.userData.points;
+    const pos = [],
+      colors = [],
+      sizes = [],
+      rings = [];
+    for (const p of data.points) {
+      pos.push(...p.position);
+      colors.push(p.color.r, p.color.g, p.color.b);
+      sizes.push(p.size);
+      rings.push(p.ring);
+    }
+    dots.geometry.dispose();
+    dots.geometry = new THREE.BufferGeometry();
+    for (const [k, v, n] of [
+      ['position', pos, 3],
+      ['color', colors, 3],
+      ['size', sizes, 1],
+      ['ring', rings, 1],
+    ])
+      dots.geometry.setAttribute(k, new THREE.Float32BufferAttribute(v, n));
+    dots.userData.names = data.names;
+    group.position.set(placement.offset, 0, 0);
+    group.scale.setScalar(placement.scale * placement.radial);
+    group.visible = true;
   }
-  update(frames,options={}) {
-    this.options={...this.options,...options};this.frames=frames||[];
-    if(this.software){this.drawSoftware();return;}
-    const o=this.options,shown=o.mode==='live'?this.frames.slice(-1):this.frames;
-    shown.forEach((frame,i)=>{
-      const mesh=this.getMesh(i),attrs=mesh.geometry.attributes,place=this.placement(frame),weights=this.weightsFor(frame);
-      const context=[frame.segment,frame.source,o.band,o.selected,o.scale].join('|');
-      const prior=o.mode==='live'&&!this.reduceMotion&&mesh.userData.context===context&&frame.end-mesh.userData.end>0&&frame.end-mesh.userData.end<2
-        ? {position:attrs.position.array.slice(),intensity:attrs.intensity.array.slice()} : null;
-      mesh.visible=true;mesh.position.set(place.offset,0,0);mesh.scale.setScalar(place.scale);
-      for(let j=0;j<this.grid.vertices.length;j++) {
-        const v=this.grid.vertices[j],s=spectralField(weights[j],frame.channels,o);
-        const radial=place.radial+s.displacement;
-        attrs.position.setXYZ(j,v[0]*radial,v[1]*radial,v[2]*radial);
-        const color=palette[s.band];attrs.color.setXYZ(j,color.r,color.g,color.b);
-        attrs.intensity.setX(j,s.amp);attrs.coverage.setX(j,s.coverage);attrs.affected.setX(j,s.affected);
+  update(frames, options = {}) {
+    this.options = { ...this.options, ...options };
+    this.frames = frames || [];
+    if (this.software) {
+      this.drawSoftware();
+      return;
+    }
+    const o = this.options,
+      shown = o.mode === 'live' ? this.frames.slice(-1) : this.frames;
+    shown.forEach((frame, i) => {
+      const mesh = this.getMesh(i),
+        attrs = mesh.geometry.attributes,
+        place = this.placement(frame),
+        weights = this.weightsFor(frame);
+      const context = [frame.segment, frame.source, o.band, o.selected, o.scale, o.map].join('|');
+      const prior =
+        o.mode === 'live' &&
+        !this.reduceMotion &&
+        mesh.userData.context === context &&
+        frame.end - mesh.userData.end > 0 &&
+        frame.end - mesh.userData.end < 2
+          ? { position: attrs.position.array.slice(), intensity: attrs.intensity.array.slice() }
+          : null;
+      mesh.visible = true;
+      mesh.position.set(place.offset, 0, 0);
+      mesh.scale.setScalar(place.scale);
+      for (let j = 0; j < this.grid.vertices.length; j++) {
+        const v = this.grid.vertices[j],
+          s = spectralField(weights[j], frame.channels, o);
+        const radial = place.radial + s.displacement;
+        attrs.position.setXYZ(j, v[0] * radial, v[1] * radial, v[2] * radial);
+        const color = fieldColor(s);
+        attrs.color.setXYZ(j, color.r, color.g, color.b);
+        attrs.intensity.setX(j, s.amp);
+        attrs.coverage.setX(j, s.coverage);
+        attrs.affected.setX(j, s.affected);
       }
-      Object.values(attrs).forEach(a=>a.needsUpdate=true);
-      mesh.userData.target=prior?{position:attrs.position.array.slice(),intensity:attrs.intensity.array.slice()}:null;
-      if(prior)for(const name of ['position','intensity'])attrs[name].array.set(prior[name]);
-      mesh.userData.context=o.mode==='live'?context:null;mesh.userData.end=frame.end;
-      mesh.material.uniforms.opacity.value=o.mode==='history'?.22:.98;
-      mesh.material.depthWrite=o.mode!=='history';
-      mesh.material.uniforms.cut.value=o.cut;
-      this.updateGlyph(i,frame,place);
+      Object.values(attrs).forEach((a) => (a.needsUpdate = true));
+      mesh.userData.target = prior
+        ? { position: attrs.position.array.slice(), intensity: attrs.intensity.array.slice() }
+        : null;
+      if (prior) for (const name of ['position', 'intensity']) attrs[name].array.set(prior[name]);
+      mesh.userData.context = o.mode === 'live' ? context : null;
+      mesh.userData.end = frame.end;
+      mesh.material.uniforms.opacity.value = o.mode === 'history' ? 0.22 : 0.98;
+      mesh.material.depthWrite = o.mode !== 'history';
+      mesh.material.uniforms.cut.value = o.cut;
+      this.updateGlyph(i, frame, place);
     });
-    for(let i=shown.length;i<this.meshes.length;i++)this.meshes[i].visible=false;
-    for(let i=shown.length;i<this.glyphs.length;i++)this.glyphs[i].visible=false;
+    for (let i = shown.length; i < this.meshes.length; i++) this.meshes[i].visible = false;
+    for (let i = shown.length; i < this.glyphs.length; i++) this.glyphs[i].visible = false;
     this.makeReference();
   }
-  label(text,position,color='#cbdcea',scale=.65) {
-    const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');ctx.font='32px sans-serif';
-    canvas.width=Math.ceil(ctx.measureText(text).width)+16;canvas.height=44;
-    ctx.font='32px sans-serif';ctx.textAlign='center';ctx.fillStyle=color;ctx.fillText(text,canvas.width/2,34);
-    const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(canvas),depthTest:false,sizeAttenuation:false}));
-    sprite.position.set(...position);sprite.userData.aspect=canvas.width/canvas.height;this.reference.add(sprite);
+  label(text, position, color = '#cbdcea', scale = 0.65) {
+    const canvas = document.createElement('canvas'),
+      ctx = canvas.getContext('2d');
+    ctx.font = '32px sans-serif';
+    canvas.width = Math.ceil(ctx.measureText(text).width) + 16;
+    canvas.height = 44;
+    ctx.font = '32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = color;
+    ctx.fillText(text, canvas.width / 2, 34);
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(canvas),
+        depthTest: false,
+        sizeAttenuation: false,
+      }),
+    );
+    sprite.position.set(...position);
+    sprite.userData.aspect = canvas.width / canvas.height;
+    this.reference.add(sprite);
     this.sizeLabels();
   }
   sizeLabels() {
-    if(!this.camera||!this.reference)return;
-    const height=22*2*Math.tan(this.camera.fov*Math.PI/360)/Math.max(1,this.container.clientHeight);
-    for(const o of this.reference.children)if(o.isSprite)o.scale.set(height*o.userData.aspect,height,1);
+    if (!this.camera || !this.reference) return;
+    const height =
+      (22 * 2 * Math.tan((this.camera.fov * Math.PI) / 360)) /
+      Math.max(1, this.container.clientHeight);
+    for (const o of this.reference.children)
+      if (o.isSprite) o.scale.set(height * o.userData.aspect, height, 1);
   }
-  referenceLine(points,color='#667f91') {
-    const g=new THREE.BufferGeometry().setFromPoints(points.map(p=>new THREE.Vector3(...p)));
-    this.reference.add(new THREE.Line(g,new THREE.LineBasicMaterial({color,depthTest:false})));
+  referenceLine(points, color = '#667f91') {
+    const g = new THREE.BufferGeometry().setFromPoints(points.map((p) => new THREE.Vector3(...p)));
+    this.reference.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color, depthTest: false })));
   }
   makeReference() {
-    const o=this.options,key=o.mode==='side'?[o.mode,o.total,o.focus,o.lens].join('|'):o.mode;if(this.referenceKey===key)return;this.referenceKey=key;
-    for(const child of [...this.reference.children]){child.geometry?.dispose();child.material.map?.dispose();child.material.dispose();this.reference.remove(child);}
-    if(o.mode==='side') {
-      const ticks=sideTicks(o.total,o.focus,o.lens);
-      this.referenceLine([[-4,-.65,0],[4,-.65,0]]);
-      for(const [i,t] of ticks.entries()) {
-        this.referenceLine([[t.x,-.6,0],[t.x,-.72,0]]);
-        this.label((i===0?'Start ':i===4?'Latest ':'')+fieldTime(t.time),[t.x,-.95-(i%2)*.22,0],undefined,i===0||i===4?1.05:.7);
+    const o = this.options,
+      key = o.mode === 'side' ? [o.mode, o.total, o.focus, o.lens].join('|') : o.mode;
+    if (this.referenceKey === key) return;
+    this.referenceKey = key;
+    for (const child of [...this.reference.children]) {
+      child.geometry?.dispose();
+      child.material.map?.dispose();
+      child.material.dispose();
+      this.reference.remove(child);
+    }
+    if (o.mode === 'side') {
+      const ticks = sideTicks(o.total, o.focus, o.lens);
+      this.referenceLine([
+        [-4, -0.65, 0],
+        [4, -0.65, 0],
+      ]);
+      for (const [i, t] of ticks.entries()) {
+        this.referenceLine([
+          [t.x, -0.6, 0],
+          [t.x, -0.72, 0],
+        ]);
+        if (i === 0 || i === 4)
+          this.label((i === 0 ? 'Start ' : 'Present ') + fieldTime(t.time), [t.x, -0.95, 0]);
       }
-      const x=sidePosition(o.focus,o.total,o.focus,o.lens);
-      this.referenceLine([[x,-.55,0],[x,.8,0]],'#ffffff');
-      this.label('Selected '+fieldTime(o.focus),[x,1.05,0],'#ffffff',1.15);
-      this.label('Time · spacing follows lens',[0,-1.4,0],'#a2b9c9',2.5);
-      // Orientation belongs to each head; the long axis is time, not anatomy.
-      this.label('Front',[0,.3,-.6],'#9bb6c7',.75);
-      this.label('Back',[0,.3,.6],'#9bb6c7',.75);
+      const x = sidePosition(o.focus, o.total, o.focus, o.lens);
+      this.referenceLine(
+        [
+          [x, -0.56, 0],
+          [x, -0.77, 0],
+        ],
+        '#ffffff',
+      );
     } else {
-      for(const [label,p] of [['L',[-1.65,.1,0]],['R',[1.65,.1,0]],['Front',[0,.1,-1.65]],['Back',[0,.1,1.65]]])
-        this.label(label,p);
+      for (const [label, p] of [
+        ['L', [-1.65, 0.1, 0]],
+        ['R', [1.65, 0.1, 0]],
+        ['Front', [0, 0.1, -1.65]],
+        ['Back', [0, 0.1, 1.65]],
+      ])
+        this.label(label, p);
     }
   }
   softwareControls() {
-    let down=null;
-    this.canvas.addEventListener('pointerdown',e=>{down=[e.clientX,e.clientY];this.canvas.setPointerCapture(e.pointerId);});
-    this.canvas.addEventListener('pointermove',e=>{if(!down)return;this.yaw+=(e.clientX-down[0])*.008;this.pitch+=(e.clientY-down[1])*.008;down=[e.clientX,e.clientY];this.drawSoftware();});
-    this.canvas.addEventListener('pointerup',()=>{down=null;});
-    this.canvas.addEventListener('pointercancel',()=>{down=null;});
-    this.canvas.addEventListener('wheel',e=>{e.preventDefault();this.zoom=Math.max(.2,Math.min(6,this.zoom*Math.exp(-e.deltaY*.001)));this.drawSoftware();},{passive:false});
+    let down = null;
+    this.canvas.addEventListener('pointerdown', (e) => {
+      down = [e.clientX, e.clientY];
+      this.canvas.setPointerCapture(e.pointerId);
+    });
+    this.canvas.addEventListener('pointermove', (e) => {
+      if (!down) return;
+      this.yaw += (e.clientX - down[0]) * 0.008;
+      this.pitch += (e.clientY - down[1]) * 0.008;
+      down = [e.clientX, e.clientY];
+      this.drawSoftware();
+    });
+    this.canvas.addEventListener('pointerup', () => {
+      down = null;
+    });
+    this.canvas.addEventListener('pointercancel', () => {
+      down = null;
+    });
+    this.canvas.addEventListener(
+      'wheel',
+      (e) => {
+        e.preventDefault();
+        this.zoom = Math.max(0.2, Math.min(6, this.zoom * Math.exp(-e.deltaY * 0.001)));
+        this.drawSoftware();
+      },
+      { passive: false },
+    );
   }
   drawSoftware() {
-    if(!this.software||!this.frames)return;
-    const ctx=this.software,w=this.canvas.width,h=this.canvas.height,o=this.options;
-    ctx.fillStyle='#060c14';ctx.fillRect(0,0,w,h);
-    const grid=scalpGrid(16,28),shown=o.mode==='live'?this.frames.slice(-1):this.frames,tris=[],glyphs=[];
-    const project=v=>{
-      const [x,y,z]=v,xx=x*Math.cos(this.yaw)+z*Math.sin(this.yaw),zz=-x*Math.sin(this.yaw)+z*Math.cos(this.yaw);
-      const yy=y*Math.cos(this.pitch)-zz*Math.sin(this.pitch),depth=y*Math.sin(this.pitch)+zz*Math.cos(this.pitch);
-      const k=Math.min(w/(o.mode==='side'?10:6),h/4)*this.zoom;
-      return [w/2+xx*k,h*.48-yy*k,depth];
+    if (!this.software || !this.frames) return;
+    const ctx = this.software,
+      w = this.canvas.width,
+      h = this.canvas.height,
+      o = this.options;
+    ctx.fillStyle = '#060c14';
+    ctx.fillRect(0, 0, w, h);
+    const grid = scalpGrid(16, 28),
+      shown = o.mode === 'live' ? this.frames.slice(-1) : this.frames,
+      tris = [],
+      glyphs = [];
+    const project = (v) => {
+      const [x, y, z] = v,
+        xx = x * Math.cos(this.yaw) + z * Math.sin(this.yaw),
+        zz = -x * Math.sin(this.yaw) + z * Math.cos(this.yaw);
+      const yy = y * Math.cos(this.pitch) - zz * Math.sin(this.pitch),
+        depth = y * Math.sin(this.pitch) + zz * Math.cos(this.pitch);
+      const k = Math.min(w / (o.mode === 'side' ? 10 : 6), h / 4) * this.zoom;
+      return [w / 2 + xx * k, h * 0.48 - yy * k, depth];
     };
-    for(const f of shown) {
-      const place=this.placement(f),weights=this.weightsFor(f,grid);
-      const values=weights.map(v=>spectralField(v,f.channels,o));
-      const pts=grid.vertices.map((v,i)=>project(v.map((x,j)=>x*(place.radial+values[i].displacement)*place.scale+(j===0?place.offset:0))));
-      for(let i=0;i<grid.indices.length;i+=3) {
-        const ids=grid.indices.slice(i,i+3),s=values[ids[0]];
-        if(s.coverage<.08||ids.some(j=>grid.vertices[j][0]>o.cut))continue;
-        tris.push({p:ids.map(j=>pts[j]),amp:ids.reduce((a,j)=>a+values[j].amp,0)/3,band:s.band,z:ids.reduce((a,j)=>a+pts[j][2],0),affected:s.affected});
+    for (const f of shown) {
+      const place = this.placement(f),
+        weights = this.weightsFor(f, grid);
+      const values = weights.map((v) => spectralField(v, f.channels, o));
+      const pts = grid.vertices.map((v, i) =>
+        project(
+          v.map(
+            (x, j) =>
+              x * (place.radial + values[i].displacement) * place.scale +
+              (j === 0 ? place.offset : 0),
+          ),
+        ),
+      );
+      for (let i = 0; i < grid.indices.length; i += 3) {
+        const ids = grid.indices.slice(i, i + 3),
+          s = values[ids[0]];
+        if (s.coverage < 0.08 || ids.some((j) => grid.vertices[j][0] > o.cut)) continue;
+        tris.push({
+          p: ids.map((j) => pts[j]),
+          amp: ids.reduce((a, j) => a + values[j].amp, 0) / 3,
+          color: fieldColor(s),
+          z: ids.reduce((a, j) => a + pts[j][2], 0),
+          affected: s.affected,
+        });
       }
-      const data=this.glyphData(f);
-      const transform=v=>project(v.map((x,j)=>x*place.radial*place.scale+(j===0?place.offset:0)));
-      data.points.forEach((p,i)=>glyphs.push({...p,position:transform(p.position),start:transform(data.lines[i].start)}));
+      const data = this.glyphData(f);
+      const transform = (v) =>
+        project(v.map((x, j) => x * place.radial * place.scale + (j === 0 ? place.offset : 0)));
+      data.points.forEach((p) => glyphs.push({ ...p, position: transform(p.position) }));
     }
-    tris.sort((a,b)=>a.z-b.z).forEach(t=>{
-      ctx.globalAlpha=o.mode==='history'?.18:1;ctx.fillStyle=palette[t.band].clone().multiplyScalar(.06+.8*t.amp).getStyle();
-      ctx.beginPath();t.p.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.fill();
-      ctx.globalAlpha=o.mode==='history'?.15:.3;ctx.strokeStyle='#08131d';ctx.stroke();
-    });
-    ctx.globalAlpha=1;const d=Math.min(devicePixelRatio||1,2);
-    glyphs.sort((a,b)=>a.position[2]-b.position[2]).forEach(p=>{
-      ctx.strokeStyle='#'+p.color.getHexString();ctx.lineWidth=1.5*d;ctx.beginPath();ctx.moveTo(...p.start.slice(0,2));ctx.lineTo(...p.position.slice(0,2));ctx.stroke();
-      ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.arc(...p.position.slice(0,2),p.size*d/2,0,Math.PI*2);if(p.ring>=0)ctx.fill();
-      ctx.strokeStyle=p.ring>0?'#ffffff':ctx.fillStyle;ctx.stroke();
-    });
-    ctx.font=(13*d)+'px sans-serif';ctx.textAlign='center';
-    const line=(a,b,color)=>{const p=project(a),q=project(b);ctx.strokeStyle=color;ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(q[0],q[1]);ctx.stroke();};
-    const label=(text,p)=>{const q=project(p);ctx.fillStyle='#dce8f1';ctx.fillText(text,q[0],q[1]);};
-    if(o.mode==='side') {
-      line([-4,-.65,0],[4,-.65,0],'#829aaa');
-      sideTicks(o.total,o.focus,o.lens).forEach((t,i)=>label((i===0?'Start ':i===4?'Latest ':'')+fieldTime(t.time),[t.x,-.95-(i%2)*.25,0]));
-      const x=sidePosition(o.focus,o.total,o.focus,o.lens);line([x,-.55,0],[x,.8,0],'#ffffff');label('Selected '+fieldTime(o.focus),[x,1.05,0]);
-    } else for(const [text,p] of [['L',[-1.65,.1,0]],['R',[1.65,.1,0]],['Front',[0,.1,-1.65]],['Back',[0,.1,1.65]]])label(text,p);
+    tris
+      .sort((a, b) => a.z - b.z)
+      .forEach((t) => {
+        ctx.globalAlpha = o.mode === 'history' ? 0.18 : 1;
+        ctx.fillStyle = t.color
+          .clone()
+          .multiplyScalar(0.06 + 0.8 * t.amp)
+          .getStyle();
+        ctx.beginPath();
+        t.p.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = o.mode === 'history' ? 0.15 : 0.3;
+        ctx.strokeStyle = '#08131d';
+        ctx.stroke();
+      });
+    ctx.globalAlpha = 1;
+    const d = Math.min(devicePixelRatio || 1, 2);
+    glyphs
+      .sort((a, b) => a.position[2] - b.position[2])
+      .forEach((p) => {
+        ctx.strokeStyle = '#' + p.color.getHexString();
+        ctx.lineWidth = 1.5 * d;
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.beginPath();
+        ctx.arc(...p.position.slice(0, 2), (p.size * d) / 2, 0, Math.PI * 2);
+        if (p.ring >= 0) ctx.fill();
+        ctx.strokeStyle = p.ring > 0 ? '#ffffff' : ctx.fillStyle;
+        ctx.stroke();
+      });
+    ctx.font = 13 * d + 'px sans-serif';
+    ctx.textAlign = 'center';
+    const line = (a, b, color) => {
+      const p = project(a),
+        q = project(b);
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(p[0], p[1]);
+      ctx.lineTo(q[0], q[1]);
+      ctx.stroke();
+    };
+    const label = (text, p) => {
+      const q = project(p);
+      ctx.fillStyle = '#dce8f1';
+      ctx.fillText(text, q[0], q[1]);
+    };
+    if (o.mode === 'side') {
+      line([-4, -0.65, 0], [4, -0.65, 0], '#829aaa');
+      sideTicks(o.total, o.focus, o.lens).forEach((t, i) => {
+        line([t.x, -0.6, 0], [t.x, -0.72, 0], '#829aaa');
+        if (i === 0 || i === 4)
+          label((i === 0 ? 'Start ' : 'Present ') + fieldTime(t.time), [t.x, -0.95, 0]);
+      });
+      const x = sidePosition(o.focus, o.total, o.focus, o.lens);
+      line([x, -0.56, 0], [x, -0.77, 0], '#ffffff');
+    } else
+      for (const [text, p] of [
+        ['L', [-1.65, 0.1, 0]],
+        ['R', [1.65, 0.1, 0]],
+        ['Front', [0, 0.1, -1.65]],
+        ['Back', [0, 0.1, 1.65]],
+      ])
+        label(text, p);
   }
 }

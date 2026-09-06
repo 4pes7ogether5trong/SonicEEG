@@ -35,11 +35,7 @@ export function fieldWeights(vertices, names) {
       const a = normalize(POSITIONS[p.a]),
         wa = Math.exp(-(Math.acos(clamp(dot(unit, a), -1, 1)) ** 2) / 0.16);
       const wb = p.bipolar
-        ? Math.exp(
-            -(
-              Math.acos(clamp(dot(unit, normalize(POSITIONS[p.b])), -1, 1)) ** 2
-            ) / 0.16,
-          )
+        ? Math.exp(-(Math.acos(clamp(dot(unit, normalize(POSITIONS[p.b])), -1, 1)) ** 2) / 0.16)
         : 0;
       return { signed: wa - wb, weight: p.bipolar ? (wa + wb) / 2 : wa };
     });
@@ -70,12 +66,7 @@ export function sampleField(
     sum += w.weight;
     power += w.weight * p;
     signed +=
-      w.signed *
-      (peaks
-        ? Math.abs(c.min) > Math.abs(c.max)
-          ? c.min
-          : c.max
-        : c.last || 0);
+      w.signed * (peaks ? (Math.abs(c.min) > Math.abs(c.max) ? c.min : c.max) : c.last || 0);
     coverage = Math.max(coverage, w.weight);
     if (c.affected?.[band]) affected += w.weight;
   });
@@ -86,8 +77,7 @@ export function sampleField(
       threshold >= 0
         ? clamp(power / sum, 0, 1)
         : clamp(Math.log1p(Math.sqrt(power / sum) / scale) * 2, 0, 1),
-    displacement:
-      threshold >= 0 ? 0 : clamp(signed / (sum * scale), -1, 1) * 0.16,
+    displacement: threshold >= 0 ? 0 : clamp(signed / (sum * scale), -1, 1) * 0.16,
     coverage: clamp(coverage * 2, 0, 1),
     affected: affected / sum,
   };
@@ -101,12 +91,60 @@ export function timePosition(age, total, focusAge = 0, lens = 0.5) {
 }
 
 // One surface per time slice; choose a band rather than mixing five translucent hues.
-export function spectralField(weights, channels, { band = -1, scale = 80, peaks = false, selected = '', threshold = -1 } = {}) {
-  const values = BANDS.map((_, b) => sampleField(weights, channels, b, scale, peaks, selected, threshold));
-  const dominant = band >= 0 ? band : values.reduce((best, v, b) => v.magnitude > values[best].magnitude ? b : best, 0);
+export function spectralField(
+  weights,
+  channels,
+  { band = -1, scale = 80, peaks = false, selected = '', threshold = -1, map = 'frequency' } = {},
+) {
+  if (map !== 'frequency') return baselineField(weights, channels, { band, selected, map });
+  const values = BANDS.map((_, b) =>
+    sampleField(weights, channels, b, scale, peaks, selected, threshold),
+  );
+  const dominant =
+    band >= 0
+      ? band
+      : values.reduce((best, v, b) => (v.magnitude > values[best].magnitude ? b : best), 0);
   return { ...values[dominant], band: dominant };
 }
-export function sidePosition(time, total, focus = total, lens = .5) {
+export function baselineField(
+  weights,
+  channels,
+  { band = -1, selected = '', map = 'change' } = {},
+) {
+  const values = Array(5).fill(0);
+  let sum = 0,
+    coverage = 0,
+    prevalence = 0;
+  weights.forEach((w, i) => {
+    const c = channels[i],
+      base = c?.baseline;
+    if (!c?.valid || !base?.validSeconds || base.mixed || (selected && c.name !== selected)) return;
+    sum += w.weight;
+    coverage = Math.max(coverage, w.weight);
+    for (let b = 0; b < 5; b++) values[b] += (w.weight * base.dbSums[b]) / base.validSeconds;
+    prevalence +=
+      (w.weight * (band >= 0 ? base.changedSeconds[band] : base.anyChangedSeconds)) /
+      base.validSeconds;
+  });
+  if (!sum)
+    return { amp: 0, coverage: 0, affected: 0, displacement: 0, band: 0, heat: 0, magnitude: 0 };
+  const b =
+    band >= 0
+      ? band
+      : values.reduce((best, v, i) => (Math.abs(v) > Math.abs(values[best]) ? i : best), 0);
+  const db = values[b] / sum,
+    occupancy = map === 'prevalence';
+  return {
+    amp: occupancy ? clamp(prevalence / sum, 0, 1) : clamp(Math.abs(db) / 12, 0, 1),
+    magnitude: occupancy ? prevalence / sum : Math.abs(db),
+    heat: occupancy ? 1 : Math.sign(db),
+    coverage: clamp(coverage * 2, 0, 1),
+    affected: 0,
+    displacement: 0,
+    band: b,
+  };
+}
+export function sidePosition(time, total, focus = total, lens = 0.5) {
   return 4 - 8 * timePosition(total - time, total, total - focus, lens);
 }
 export function fieldTime(time) {
@@ -115,6 +153,9 @@ export function fieldTime(time) {
     ? `${Math.floor(time / 3600)}:${String(Math.floor(time / 60) % 60).padStart(2, '0')}:${String(time % 60).padStart(2, '0')}`
     : `${Math.floor(time / 60)}:${String(time % 60).padStart(2, '0')}`;
 }
-export function sideTicks(total, focus = total, lens = .5) {
-  return [0, .25, .5, .75, 1].map(f => ({ time: total * f, x: sidePosition(total * f, total, focus, lens) }));
+export function sideTicks(total, focus = total, lens = 0.5) {
+  return [0, 0.25, 0.5, 0.75, 1].map((f) => ({
+    time: total * f,
+    x: sidePosition(total * f, total, focus, lens),
+  }));
 }

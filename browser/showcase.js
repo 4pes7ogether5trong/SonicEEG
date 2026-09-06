@@ -1,102 +1,132 @@
-// Scripted sensor potentials for exploring the renderer, not patient recordings.
-// Signals are continuous in sample time and shared by sound and the 3D field.
+// Fully synthetic examples: scripted EEG appearances, not patient recordings.
 import { POSITIONS } from './montage.js';
-
-export const SHOWCASE_LENGTH = 144;
-export const SHOWCASE_SCENES = [
-  'Posterior alpha · waxing and waning',
-  'Traveling focus · theta to beta',
-  'Focal sharp trains · growing and spreading',
-  'Bilateral rhythm · synchronized packets',
-  'Quiet intervals · alternating bursts',
-  'Layered recovery · multiple frequencies',
-];
+export const SHOWCASE_LENGTH = 720;
 export const SHOWCASE_SENSORS = [
-  'FP1', 'FP2', 'F7', 'F3', 'FZ', 'F4', 'F8', 'T7', 'C3', 'CZ',
-  'C4', 'T8', 'P7', 'P3', 'PZ', 'P4', 'P8', 'O1', 'O2',
+  'FP1',
+  'FP2',
+  'F7',
+  'F3',
+  'FZ',
+  'F4',
+  'F8',
+  'T7',
+  'C3',
+  'CZ',
+  'C4',
+  'T8',
+  'P7',
+  'P3',
+  'PZ',
+  'P4',
+  'P8',
+  'O1',
+  'O2',
 ];
+export const SAMPLER_LABELS = [
+  '3/s generalized spike-wave · absence-like',
+  'Sustained evolving seizure · NCSE scenario',
+  'N3-like slow-wave sleep',
+  'Awake, eyes open · intermittent blinks',
+];
+export const SEIZURE_INTERVALS = [
+  Array.from({ length: 6 }, (_, i) => [12 + i * 120, 24 + i * 120]),
+  [[10, SHOWCASE_LENGTH]],
+  [],
+  [],
+];
+export function showcasePhase(time, slot = 0) {
+  const active = SEIZURE_INTERVALS[slot].some(([a, b]) => time >= a && time < b);
+  if (slot === 0)
+    return active ? '3/s generalized spike-wave' : 'Awake background · between GSW episodes';
+  if (slot === 1)
+    return time < 10
+      ? 'Reference background'
+      : time < 610
+        ? 'Continuous evolving seizure pattern'
+        : 'Electrographic status scenario · >10 min';
+  return SAMPLER_LABELS[slot];
+}
 const TAU = 2 * Math.PI;
+const gauss = (x, w) => Math.exp(-0.5 * (x / w) ** 2);
 const smooth = (x) => {
   x = Math.max(0, Math.min(1, x));
   return x * x * (3 - 2 * x);
 };
-const envelope = (t, start, end) =>
-  smooth((t - start) / 2) * smooth((end - t) / 2);
-const gaussian = (x, width) => Math.exp(-0.5 * (x / width) ** 2);
-const spot = ([x, y, z], [a, b, c], width) =>
-  Math.exp(-((x - a) ** 2 + (y - b) ** 2 + (z - c) ** 2) / (2 * width ** 2));
-
-export function showcasePhase(time) {
-  return time >= SHOWCASE_LENGTH
-    ? 'Complete · explore the accumulated field'
-    : SHOWCASE_SCENES[Math.max(0, Math.min(5, Math.floor(time / 24)))];
-}
-
-function potential(position, t, slot, seed) {
-  const [x, y, z] = position;
-  const phase = seed * .31 + slot * .83;
-  const direction = slot % 2 ? -1 : 1;
-  const posterior = spot(position, [0, .35, .9], .55);
-  const anterior = spot(position, [0, .4, -.9], .45);
-  const quiet = 1 - .9 * envelope(t, 96, 120);
-  // Low amplitude, deterministic multitone background. No independent row noise.
-  let value = quiet * (
-    4 * Math.sin(TAU * (2.13 + slot * .07) * t + x * 1.1 + z * .7 + phase) +
-    2 * Math.sin(TAU * 19.37 * t + y * 2 + phase) +
-    1.4 * Math.sin(TAU * 7.19 * t + z * 2 - x + phase)
-  );
-  const alpha = envelope(t, 0, 26) + envelope(t, 120, 144);
-  value += alpha * posterior * (24 + 18 * Math.sin(TAU * .17 * t + phase)) *
-    Math.sin(TAU * (9.3 + slot * .43) * t + x * .4 + phase);
-  // Two smooth frontal blink-like deflections in the opening scene.
-  value += anterior * 55 * (gaussian(t - 8, .18) + gaussian(t - 16, .22));
-
-  const u = t - 24, p = Math.max(0, Math.min(1, u / 24));
-  const center = [direction * (-.95 + 1.9 * p), .42 + .3 * Math.sin(Math.PI * p),
-    .5 * Math.sin(TAU * p + slot * .4)];
-  const moving = spot(position, center, .38);
-  // Integral of f(u)=4+18u/24: frequency changes without phase discontinuities.
-  value += envelope(t, 24, 48) * moving * (50 + 45 * p) *
-    Math.sin(TAU * (4 * u + .375 * u * u) + phase - x * .6);
-
-  const v = t - 48, q = Math.max(0, Math.min(1, v / 24));
-  const cycles = 1.2 * v + .035 * v * v;
-  const hz = 1.2 + .07 * v;
-  const pulse = (cycles - Math.round(cycles)) / Math.max(.5, hz);
-  value += envelope(t, 48, 72) * spot(position, [-direction * .95, .2, .05], .25 + .3 * q) *
-    (100 + 70 * q) * (gaussian(pulse, .017) - .4 * gaussian(pulse - .12, .06));
-
-  const bilateral = spot(position, [-.7, .65, -.35], .5) +
-    spot(position, [.7, .65, -.35], .5);
-  const packet = .3 + .7 * Math.sin(Math.PI * (t - 72) / 4) ** 2;
-  value += envelope(t, 72, 96) * bilateral * packet *
-    (65 * Math.sin(TAU * (3.1 + slot * .13) * t + phase) +
-      18 * Math.sin(TAU * 15.7 * t + phase));
-
-  const burstTime = t - 96, burstIndex = Math.floor(burstTime / 4);
-  const burst = gaussian((burstTime % 4) - 2, .38);
-  const side = burstIndex % 2 ? direction : -direction;
-  value += envelope(t, 96, 120) * burst * spot(position, [side * .6, .6, .25], .6) *
-    (110 * Math.sin(TAU * 5.4 * t + phase) + 32 * Math.sin(TAU * 21.3 * t));
-
-  const recovery = envelope(t, 120, 144) * (1 - smooth((t - 136) / 8));
-  value += recovery * (
-    32 * anterior * Math.sin(TAU * 6.2 * t + phase) +
-    22 * spot(position, [direction * .85, .3, 0], .4) * Math.sin(TAU * 34.7 * t + phase)
-  );
+const spot = ([x, y, z], [a, b, c], w) =>
+  Math.exp(-((x - a) ** 2 + (y - b) ** 2 + (z - c) ** 2) / (2 * w * w));
+function potential(pos, t, slot, seed) {
+  const [x, y, z] = pos,
+    phase = seed * 0.31;
+  const front = spot(pos, [0, 0.6, -0.7], 0.65),
+    back = spot(pos, [0, 0.4, 0.85], 0.5);
+  let value =
+    1.5 * Math.sin(TAU * 6.37 * t + x + phase) +
+    8 * Math.sin(TAU * 18.73 * t + y * 2 + phase) +
+    5 * Math.sin(TAU * 25.91 * t - z + phase) +
+    4 * back * Math.sin(TAU * 10.21 * t + x * 0.7 + phase);
+  if (slot === 0) {
+    const event = SEIZURE_INTERVALS[0].find(([a, b]) => t >= a && t < b);
+    if (event) {
+      const u = t - event[0],
+        pulse = u - Math.floor(u * 3) / 3 - 0.04;
+      const envelope = smooth(u / 0.04) * smooth((event[1] - t) / 0.04);
+      // Same 3/s complexes throughout the cap, with a symmetric frontal maximum.
+      value +=
+        envelope * (0.35 + front) * 160 * (gauss(pulse, 0.014) - 0.65 * gauss(pulse - 0.12, 0.055));
+    }
+  } else if (slot === 1 && t >= 10) {
+    const u = t - 10,
+      hz = 3.2 + 0.7 * Math.sin((TAU * u) / 70);
+    const cycles = 3.2 * u + ((0.7 * 70) / TAU) * (1 - Math.cos((TAU * u) / 70));
+    const pulse = (cycles - Math.round(cycles)) / hz;
+    const spread = smooth(u / 80);
+    const location =
+      spot(pos, [0.8, 0.35, -0.05], 0.38 + 0.25 * spread) +
+      0.45 * spread * spot(pos, [-0.6, 0.6, -0.3], 0.6);
+    const envelope = smooth(u / 0.3);
+    value +=
+      envelope *
+      location *
+      (150 + 35 * Math.sin((TAU * u) / 29)) *
+      (gauss(pulse, 0.017) - 0.5 * gauss(pulse - 0.105, 0.048));
+    value +=
+      envelope *
+      location *
+      32 *
+      Math.sin(TAU * (5 * u + ((0.15 * 50) / TAU) * (1 - Math.cos((TAU * u) / 50))) + x);
+  } else if (slot === 2) {
+    const waxing = 0.8 + 0.2 * Math.sin((TAU * t) / 18);
+    value =
+      0.3 * value +
+      waxing *
+        (0.35 + front) *
+        (100 * Math.sin(TAU * 0.87 * t + 0.25 * x) +
+          55 * Math.sin(TAU * 1.43 * t + 0.6 * z + phase));
+    const spindle = gauss((t % 23) - 15, 0.65);
+    value += 9 * spindle * spot(pos, [0, 0.95, 0], 0.55) * Math.sin(TAU * 13.1 * t);
+  } else if (slot === 3) {
+    // Unevenly spaced, broad frontal deflections: not sharp-discharge templates.
+    for (const at of [9, 23.5, 24.4, 51, 79, 104]) {
+      const u = (t % 120) - at;
+      value +=
+        105 * spot(pos, [0, 0.3, -0.95], 0.38) * (gauss(u, 0.11) - 0.22 * gauss(u - 0.22, 0.18));
+    }
+  }
   return value;
 }
-
-export function showcaseBlock(start, duration = .5, rate = 128, { slot = 0, seed = 1 } = {}) {
+export function showcaseBlock(start, duration = 0.5, rate = 128, { slot = 0, seed = 1 } = {}) {
   const count = Math.round(duration * rate);
   const channels = SHOWCASE_SENSORS.map((name) => ({
-    name: name + '-AVG', samples: new Float64Array(count),
+    name: name + '-AVG',
+    samples: new Float64Array(count),
   }));
   for (let i = 0; i < count; i++) {
-    const t = start + i / rate;
-    const values = SHOWCASE_SENSORS.map((name) => potential(POSITIONS[name], t, slot, seed));
+    const t = start + i / rate,
+      values = SHOWCASE_SENSORS.map((name) => potential(POSITIONS[name], t, slot, seed));
     const average = values.reduce((sum, v) => sum + v, 0) / values.length;
-    for (let c = 0; c < channels.length; c++) channels[c].samples[i] = values[c] - average;
+    channels.forEach((c, j) => {
+      c.samples[i] = values[j] - average;
+    });
   }
   return channels;
 }

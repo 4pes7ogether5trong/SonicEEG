@@ -75,13 +75,10 @@ for (const [slot, name] of PATIENTS.entries()) {
     el.id = 'patient-' + name + '-' + el.dataset.id;
   for (const label of root.querySelectorAll('label[for]'))
     label.htmlFor = 'patient-' + name + '-' + label.htmlFor;
-  root.querySelector('[data-patient-heading]').textContent =
-    'Patient ' + name;
+  root.querySelector('[data-patient-heading]').textContent = 'Patient ' + name;
   root.querySelector('[data-id="setup"] h2').textContent =
     'Patient ' + name + ' · confirm capture setup';
-  card
-    .querySelector('[data-action="view"]')
-    .setAttribute('aria-controls', root.id);
+  card.querySelector('[data-action="view"]').setAttribute('aria-controls', root.id);
   $('panels').append(root);
   panels.push(
     mountPatient(root, mixer, slot, (state) => {
@@ -120,7 +117,7 @@ for (const [slot, name] of PATIENTS.entries()) {
   };
   card.querySelector('[data-action="baseline"]').onclick = () => {
     message(
-      mixer.pinBaseline(slot)
+      panels[slot].pinBaseline()
         ? 'Patient ' +
             name +
             ': current two-second measurements pinned. Confirm this is an appropriate clean reference in the source EEG. The reference will not drift.'
@@ -147,7 +144,10 @@ function applyLayout() {
   $('layout').setAttribute('aria-pressed', String(quadrants));
   $('layout').disabled = inExercise;
 }
-$('layout').onclick = () => { quadrants = !quadrants; applyLayout(); };
+$('layout').onclick = () => {
+  quadrants = !quadrants;
+  applyLayout();
+};
 
 function refreshCards() {
   mixer.poll();
@@ -158,16 +158,10 @@ function refreshCards() {
     performance.now() - trialStarted > 3500 &&
     TRIALS[trial].active.some((slot) => mixer.live.status(slot) !== 'live')
   )
-    retryTrial(
-      'An active synthetic source stopped supplying fresh measurements.',
-    );
-  if (
-    practiceRunning &&
-    (!mixer.enabled || mixer.context?.state !== 'running' || !mixer.volume)
-  ) {
+    retryTrial('An active synthetic source stopped supplying fresh measurements.');
+  if (practiceRunning && (!mixer.enabled || mixer.context?.state !== 'running' || !mixer.volume)) {
     cancelPractice();
-    $('sound-check-state').textContent =
-      'Sound check interrupted. Try again before confirming.';
+    $('sound-check-state').textContent = 'Sound check interrupted. Try again before confirming.';
   }
   cards.forEach((card, slot) => {
     const s = mixer.live.slot(slot),
@@ -198,28 +192,26 @@ function refreshCards() {
       (state === 'live'
         ? !mixer.enabled || mixer.context?.state !== 'running'
           ? 'Signal ready · enable sound'
-          : !mixer.volume ? 'Master volume is zero'
-          : !s.gain ? 'Patient volume is zero'
-          : audioLevels(s.frame, mixer).levels.some(l => l.gain > 0)
-            ? 'Playing EEG' : 'Signal received · selected bands quiet'
+          : !mixer.volume
+            ? 'Master volume is zero'
+            : !s.gain
+              ? 'Patient volume is zero'
+              : audioLevels(s.frame, mixer).levels.some((l) => l.gain > 0)
+                ? 'Playing EEG'
+                : 'Signal received · selected bands quiet'
         : labels[state] || state) +
       (s.muted
         ? ' · MUTED'
         : mixer.focus >= 0 && mixer.focus !== slot
           ? ' · reduced by focus'
           : '');
-    card
-      .querySelector('[data-action="mute"]')
-      .setAttribute('aria-pressed', String(s.muted));
-    card.querySelector('[data-action="mute"]').textContent = s.muted
-      ? 'Unmute'
-      : 'Mute';
+    card.querySelector('[data-action="mute"]').setAttribute('aria-pressed', String(s.muted));
+    card.querySelector('[data-action="mute"]').textContent = s.muted ? 'Unmute' : 'Mute';
     card
       .querySelector('[data-action="focus"]')
       .setAttribute('aria-pressed', String(mixer.focus === slot));
     card.querySelector('[data-action="identify"]').disabled = inExercise;
-    card.querySelector('[data-action="baseline"]').disabled =
-      inExercise || state !== 'live';
+    card.querySelector('[data-action="baseline"]').disabled = inExercise || state !== 'live';
     card.querySelector('output').textContent = s.gain.toFixed(1) + '×';
     const pattern = mixer.trackers[slot].value;
     card.querySelector('.pattern-state').textContent =
@@ -232,17 +224,12 @@ function refreshCards() {
         : '';
     const levels = state === 'live' ? audioLevels(s.frame).levels : [];
     card.querySelectorAll('.patient-levels i').forEach((bar, band) => {
-      const rms = Math.max(
-        0,
-        ...levels.filter((l) => l.band === band).map((l) => l.rms),
-      );
+      const rms = Math.max(0, ...levels.filter((l) => l.band === band).map((l) => l.rms));
       bar.style.height = Math.min(100, (100 * rms) / 80) + '%';
     });
   });
   $('audio').textContent =
-    mixer.enabled && mixer.context?.state === 'running'
-      ? 'Mute all sound'
-      : 'Enable sound';
+    mixer.enabled && mixer.context?.state === 'running' ? 'Mute all sound' : 'Enable sound';
   $('audio').setAttribute(
     'aria-pressed',
     String(mixer.enabled && mixer.context?.state === 'running'),
@@ -251,7 +238,9 @@ function refreshCards() {
     ? 'Sound off · select Enable sound'
     : mixer.context?.state !== 'running'
       ? 'Audio interrupted · select Enable sound'
-      : (mixer.volume ? 'Sound on' : 'Master volume is zero');
+      : mixer.volume
+        ? 'Sound on'
+        : 'Master volume is zero';
   const capturing = panels.some((p) => p.hasCapture());
   $('demo-all').disabled = capturing || inExercise;
   $('demo-history').disabled = capturing || inExercise;
@@ -279,9 +268,7 @@ $('audio').onclick = async () => {
     try {
       await mixer.enable();
     } catch {
-      message(
-        'Audio is unavailable. Check browser sound permissions and try again.',
-      );
+      message('Audio is unavailable. Check browser sound permissions and try again.');
     }
   }
   refreshCards();
@@ -290,25 +277,21 @@ $('master-volume').oninput = () => {
   mixer.configure({ volume: Number($('master-volume').value) / 125 });
   $('master-value').textContent = $('master-volume').value + '%';
   if (trialPlaying)
-    retryTrial(
-      'Output level changed during the clip; your new level is preserved.',
-    );
+    retryTrial('Output level changed during the clip; your new level is preserved.');
 };
-$('audio-spatial').onchange = () =>
-  mixer.configure({ spatial: $('audio-spatial').value });
-$('audio-band').onchange = () =>
-  mixer.configure({ band: Number($('audio-band').value) });
-$('ambient').onchange = () =>
-  mixer.configure({ ambient: $('ambient').checked });
-$('visuals').onchange = () =>
-  panels.forEach((p) => p.setVisuals($('visuals').checked));
+$('audio-spatial').onchange = () => mixer.configure({ spatial: $('audio-spatial').value });
+$('audio-band').onchange = () => mixer.configure({ band: Number($('audio-band').value) });
+$('ambient').onchange = () => mixer.configure({ ambient: $('ambient').checked });
+$('visuals').onchange = () => panels.forEach((p) => p.setVisuals($('visuals').checked));
 async function playDemo({ showcase = true, fullHistory = false } = {}) {
   if (panels.some((p) => p.hasCapture()) || inExercise) return;
   const token = ++demoToken;
   message(
-    fullHistory ? 'Building the complete synthetic journey. Playback will be off.' :
-      showcase ? 'Six synthetic scenes · 2:24. Rotate the field or switch to Whole history.' :
-        'Original sound demo · 1:24.',
+    fullHistory
+      ? 'Building the complete synthetic journey. Playback will be off.'
+      : showcase
+        ? 'A: 3/s GSW · B: sustained evolving seizure · C: N3 sleep · D: awake with blinks. 12-minute sampler.'
+        : 'Original sound demo · 1:24.',
   );
   try {
     if (!fullHistory) await mixer.enable();
@@ -317,13 +300,17 @@ async function playDemo({ showcase = true, fullHistory = false } = {}) {
     $('ambient').checked = true;
     await Promise.all(
       panels.map((p, slot) =>
-        p.demo({ seed: slot + 1, showcase,
+        p.demo({
+          seed: slot + 1,
+          showcase,
           preload: fullHistory ? SHOWCASE_LENGTH : showcase ? 2 : 0,
-          duration: showcase ? SHOWCASE_LENGTH : DEMO_LENGTH }),
+          duration: showcase ? SHOWCASE_LENGTH : DEMO_LENGTH,
+        }),
       ),
     );
     if (token !== demoToken) return;
-    if (fullHistory) message('Full synthetic history ready · drag to rotate; use the timeline to explore.');
+    if (fullHistory)
+      message('Full synthetic history ready · drag to rotate; use the timeline to explore.');
     refreshCards();
   } catch {
     if (token === demoToken)
@@ -342,21 +329,13 @@ $('stop-all').onclick = () => {
   cancelPractice();
   if (trialRunning) retryTrial('Trial stopped.');
   else stopSources();
-  message(
-    'All four sources stopped. Their captured histories remain available.',
-  );
+  message('All four sources stopped. Their captured histories remain available.');
 };
 function exerciseControls() {
-  for (const id of ['audio-spatial', 'audio-band', 'ambient'])
-    $(id).disabled = inExercise;
+  for (const id of ['audio-spatial', 'audio-band', 'ambient']) $(id).disabled = inExercise;
   cards.forEach((card) => {
-    for (const selector of [
-      '[data-action="mute"]',
-      '[data-action="focus"]',
-      'input',
-    ])
-      card.querySelector(selector).disabled =
-        inExercise && (trialRunning || selector !== 'input');
+    for (const selector of ['[data-action="mute"]', '[data-action="focus"]', 'input'])
+      card.querySelector(selector).disabled = inExercise && (trialRunning || selector !== 'input');
   });
   panels.forEach((p) => p.lock(inExercise));
   $('sound-check').disabled = trialRunning || practiceRunning;
@@ -485,14 +464,11 @@ function retryTrial(reason, unheard = false) {
     $('sound-confirmed').disabled = true;
   }
   $('trial-answers').disabled = true;
-  $('trial-start').disabled =
-    !$('sound-confirmed').checked || trial >= TRIALS.length;
+  $('trial-start').disabled = !$('sound-confirmed').checked || trial >= TRIALS.length;
   $('trial-state').textContent =
     reason +
     ' Not scored. ' +
-    (unheard
-      ? 'Repeat the sound check, then retry this clip.'
-      : 'Retry this clip when ready.');
+    (unheard ? 'Repeat the sound check, then retry this clip.' : 'Retry this clip when ready.');
   $('trial-export').disabled = !results.length && !unscored.length;
   exerciseControls();
 }
@@ -501,12 +477,7 @@ $('trial-unheard').onclick = () => {
 };
 
 $('trial-start').onclick = async () => {
-  if (
-    !inExercise ||
-    trialRunning ||
-    trial >= TRIALS.length ||
-    !$('sound-confirmed').checked
-  )
+  if (!inExercise || trialRunning || trial >= TRIALS.length || !$('sound-confirmed').checked)
     return;
   cancelPractice();
   const token = ++trialToken;
@@ -557,8 +528,7 @@ $('trial-start').onclick = async () => {
       if (token !== trialToken) return;
       trialPlaying = false;
       stopSources();
-      $('trial-state').textContent =
-        'Clip complete. Submit the patients you heard change.';
+      $('trial-state').textContent = 'Clip complete. Submit the patients you heard change.';
     }, TRIAL_DURATION * 1000);
     refreshCards();
   } catch {
@@ -568,14 +538,10 @@ $('trial-start').onclick = async () => {
 };
 $('trial-answer').onclick = () => {
   if (!trialRunning) return;
-  const answer = [...$('trial-answers').querySelectorAll('input:checked')].map(
-    (i) => Number(i.value),
+  const answer = [...$('trial-answers').querySelectorAll('input:checked')].map((i) =>
+    Number(i.value),
   );
-  const result = scoreTrial(
-    trial,
-    answer,
-    (performance.now() - trialStarted) / 1000,
-  );
+  const result = scoreTrial(trial, answer, (performance.now() - trialStarted) / 1000);
   result.settings = trialSettings;
   result.soundCheckConfirmed = true;
   results.push(result);
@@ -639,9 +605,7 @@ setInterval(refreshCards, 500);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     if (trialPlaying)
-      retryTrial(
-        'The tab left the foreground; uninterrupted listening cannot be assumed.',
-      );
+      retryTrial('The tab left the foreground; uninterrupted listening cannot be assumed.');
     if (practiceRunning) {
       cancelPractice();
       $('sound-check-state').textContent =
@@ -650,10 +614,7 @@ document.addEventListener('visibilitychange', () => {
     message(
       'This tab is in the background. Capture may pause; stale measurements will fade from sound.',
     );
-  } else
-    message(
-      'Tab active. Check each patient for fresh measurements before continuing.',
-    );
+  } else message('Tab active. Check each patient for fresh measurements before continuing.');
 });
 window.addEventListener('beforeunload', () => mixer.disable());
 refreshCards();

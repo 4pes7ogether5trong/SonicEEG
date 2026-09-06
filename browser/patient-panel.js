@@ -5,13 +5,16 @@ import { FeaturePipeline } from './pipeline.js';
 import { BrowserCapture } from './capture.js';
 import { FluidField } from './field.js';
 import { patientDemoBlock, DEMO_LENGTH } from './demo.js';
-import { showcaseBlock, showcasePhase, SHOWCASE_LENGTH } from './showcase.js';
-import { extractTraces } from './pixels.js';
 import {
-  settingsDifference,
-  settingsWatchReference,
-  validFilters,
-} from './display-settings.js';
+  showcaseBlock,
+  showcasePhase,
+  SHOWCASE_LENGTH,
+  SAMPLER_LABELS,
+  SEIZURE_INTERVALS,
+} from './showcase.js';
+import { BaselineMap } from './baseline.js';
+import { extractTraces } from './pixels.js';
+import { settingsDifference, settingsWatchReference, validFilters } from './display-settings.js';
 export function mountPatient(root, audio, slot, onState = () => {}) {
   let visible = false,
     preloading = false,
@@ -22,7 +25,8 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       $(id).textContent = value;
     };
   const capture = new BrowserCapture(),
-    archive = new LocalArchive();
+    archive = new LocalArchive(),
+    baselineMap = new BaselineMap();
   let history = new TemporalHistory(),
     source = 'none',
     active = false,
@@ -84,8 +88,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       ? `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(Math.floor(s) % 60).padStart(2, '0')}`
       : `${Math.floor(s / 60)}:${String(Math.floor(s) % 60).padStart(2, '0')}`;
   };
-  const number = (id) =>
-    $(id).value.trim() === '' ? null : Number($(id).value);
+  const number = (id) => ($(id).value.trim() === '' ? null : Number($(id).value));
   function status(message, error = false) {
     onState({
       source,
@@ -114,6 +117,8 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     );
   }
   function newHistory(kind, save = true) {
+    baselineMap.clear();
+    $('demo-events').hidden = true;
     sessionToken++;
     history = new TemporalHistory();
     source = kind;
@@ -133,27 +138,19 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
   }
   async function beginSave() {
     if (!storageReady) {
-      text(
-        'storage-state',
-        'Local storage is unavailable. History remains in memory.',
-      );
+      text('storage-state', 'Local storage is unavailable. History remains in memory.');
       return;
     }
     const token = sessionToken;
     try {
-      const id = await archive.create(
-        'Patient ' + 'ABCD'[slot] + ' · ' + source,
-      );
+      const id = await archive.create('Patient ' + 'ABCD'[slot] + ' · ' + source);
       if (token !== sessionToken) return;
       localId = id;
       await refreshSessions();
       text('storage-state', 'Saving new quantitative frames on this device.');
     } catch {
       localId = null;
-      text(
-        'storage-state',
-        'Could not create a local session. History remains in memory.',
-      );
+      text('storage-state', 'Could not create a local session. History remains in memory.');
     }
   }
   function receive(frame) {
@@ -162,6 +159,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       return;
     }
     // Every accepted interval carries its capture context. No screenshot bytes are retained.
+    baselineMap.apply(frame);
     history.add(frame);
     lastFrame = frame;
     if (localId && $('save-local').checked) {
@@ -186,9 +184,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     return $('follow').checked
       ? lastFrame
       : historyDetail?.find(
-          (f) =>
-            f.start <= Number($('time').value) &&
-            f.end > Number($('time').value),
+          (f) => f.start <= Number($('time').value) && f.end > Number($('time').value),
         ) || history.select(Number($('time').value));
   }
   function render() {
@@ -210,12 +206,13 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
               ? summarizeFrames(historyDetail)
               : history.overview(16),
       threshold =
-        $('statistic').value === 'prevalence'
-          ? Number($('occupancy-threshold').value)
-          : -1;
-    $('occupancy-threshold').disabled = threshold < 0;
-    $('scale').disabled = threshold >= 0;
+        $('statistic').value === 'prevalence' ? Number($('occupancy-threshold').value) : -1;
+    const frequencyMap = $('color-mode').value === 'frequency';
+    $('statistic').disabled = !frequencyMap;
+    $('occupancy-threshold').disabled = threshold < 0 || !frequencyMap;
+    $('scale').disabled = threshold >= 0 || !frequencyMap;
     field.update(frames, {
+      map: $('color-mode').value,
       mode,
       band,
       selected,
@@ -228,6 +225,35 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       threshold,
     });
     text('clock', format(focus));
+    text(
+      'map-legend',
+      $('color-mode').value === 'frequency'
+        ? 'Color = strongest band · white ring = sharp candidate'
+        : $('color-mode').value === 'change'
+          ? 'Baseline Δ · blue = less · orange = more · full color = 12 dB'
+          : 'Changed time · dark 0% → orange 100% · ≥6 dB',
+    );
+    text(
+      'baseline-status',
+      baselineMap.reference
+        ? 'Fixed baseline pinned · future intervals compared'
+        : 'Pin baseline to compare future intervals.',
+    );
+    const scripted = source === 'demo' && demoKind === 'showcase' && mode !== 'live';
+    $('demo-events').hidden = !scripted;
+    if (scripted) {
+      $('demo-event-track').replaceChildren(
+        ...SEIZURE_INTERVALS[slot]
+          .filter(([start]) => start < shownEnd)
+          .map(([start, end]) => {
+            const marker = document.createElement('span');
+            marker.style.left = (start / shownEnd) * 100 + '%';
+            marker.style.width = ((Math.min(end, shownEnd) - start) / shownEnd) * 100 + '%';
+            marker.title = format(start) + '–' + format(Math.min(end, shownEnd)) + ' · programmed';
+            return marker;
+          }),
+      );
+    }
     text('elapsed', format(history.end));
     text(
       'resolution',
@@ -235,7 +261,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     );
     text(
       'view-label',
-      `${source === 'demo' ? 'SYNTHETIC · ' : ''}${mode === 'side' ? 'Each head = time interval · Start → Latest' : mode === 'history' ? 'Center = recent · outward = older' : 'Two-second spectrum · ' + $('scale').value + ' µV ruler'}${f.mixed ? ' · mixed settings' : ''}`,
+      `${source === 'demo' ? 'SYNTHETIC · ' : ''}${mode === 'side' ? '' : mode === 'history' ? 'Center = recent · outward = older' : frequencyMap ? 'Two-second spectrum · ' + $('scale').value + ' µV ruler' : 'Two-second spectrum · fixed baseline'}${f.mixed ? ' · mixed settings' : ''}`,
     );
     const old = $('channel').value,
       names = f.channels.map((c) => c.name);
@@ -256,6 +282,13 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     const c =
       f.channels.find((c) => c.name === selected) ||
       f.channels.filter((c) => c.valid).sort((a, b) => b.rms - a.rms)[0];
+    const base = c?.valid && c.baseline?.validSeconds && !c.baseline.mixed ? c.baseline : null;
+    text(
+      'baseline-metrics',
+      base
+        ? `${c.name} · ${((100 * (band >= 0 ? base.changedSeconds[band] : base.anyChangedSeconds)) / base.validSeconds).toFixed(1)}% changed · ${base.validSeconds.toFixed(1)} compared seconds`
+        : 'No compatible baseline comparison in this interval.',
+    );
     if (c) {
       text(
         'channel-metrics',
@@ -373,12 +406,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
         settings: '#f3bb75',
       }[name];
       ctx.lineWidth = 2;
-      ctx.strokeRect(
-        r.x * c.width,
-        r.y * c.height,
-        r.w * c.width,
-        r.h * c.height,
-      );
+      ctx.strokeRect(r.x * c.width, r.y * c.height, r.w * c.width, r.h * c.height);
       ctx.fillStyle = ctx.strokeStyle;
       ctx.font = '16px system-ui';
       ctx.fillText(name, r.x * c.width + 4, Math.max(18, r.y * c.height - 4));
@@ -391,12 +419,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       for (const row of overlay.rows)
         for (let x = 0; x < row.pixelY.length; x += 3)
           if (row.observed[x])
-            ctx.fillRect(
-              r.x * c.width + x * sx,
-              r.y * c.height + row.pixelY[x] * sy,
-              2,
-              2,
-            );
+            ctx.fillRect(r.x * c.width + x * sx, r.y * c.height + row.pixelY[x] * sy, 2, 2);
     }
   }
   function point(event) {
@@ -411,14 +434,9 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     if (calibration) {
       calibration.push(p);
       if (calibration.length === 2) {
-        const pixels =
-          Math.abs(calibration[1].y - calibration[0].y) *
-          capture.video.videoHeight;
+        const pixels = Math.abs(calibration[1].y - calibration[0].y) * capture.video.videoHeight;
         if (pixels < 4) {
-          text(
-            'setup-status',
-            'Calibration marks are too close together. Try again.',
-          );
+          text('setup-status', 'Calibration marks are too close together. Try again.');
         } else {
           $('uv').value = (Number($('cal-uv').value) / pixels).toFixed(4);
           text(
@@ -482,16 +500,12 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       );
     const height = Math.round(regions.plot.h * capture.video.videoHeight),
       offset = Number($('row-offset').value) || 0;
-    const useOCR =
-      ocrLabels === $('labels').value && ocrRows.length === parsed.length;
+    const useOCR = ocrLabels === $('labels').value && ocrRows.length === parsed.length;
     return parsed.map((p, i) => ({
       name: p.name,
       y:
         (useOCR
-          ? (regions.labels.y +
-              ocrRows[i].y * regions.labels.h -
-              regions.plot.y) /
-            regions.plot.h
+          ? (regions.labels.y + ocrRows[i].y * regions.labels.h - regions.plot.y) / regions.plot.h
           : (i + 0.5) / parsed.length) *
           height +
         offset,
@@ -539,14 +553,10 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       const rows = getRows(),
         c = capture.crop(regions.plot),
         ctx = c.getContext('2d', { willReadFrequently: true }),
-        result = extractTraces(
-          ctx.getImageData(0, 0, c.width, c.height),
-          rows,
-          {
-            uvPerPixel: Number($('uv').value),
-            negativeUp: $('polarity').value === 'up',
-          },
-        );
+        result = extractTraces(ctx.getImageData(0, 0, c.width, c.height), rows, {
+          uvPerPixel: Number($('uv').value),
+          negativeUp: $('polarity').value === 'up',
+        });
       drawPreview({ width: c.width, height: c.height, rows: result });
       text(
         'setup-status',
@@ -564,26 +574,18 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     try {
       if (!capture.stream) throw new Error('Select a source window again.');
       if (!$('confirmed').checked)
-        throw new Error(
-          'Confirm the rows, polarity, time and voltage scales before starting.',
-        );
+        throw new Error('Confirm the rows, polarity, time and voltage scales before starting.');
       const rows = getRows(),
         seconds = Number($('seconds').value),
         uvPerPixel = Number($('uv').value),
         s = settings();
-      if (
-        !(seconds > 0 && seconds <= 120 && uvPerPixel > 0 && uvPerPixel <= 100)
-      )
+      if (!(seconds > 0 && seconds <= 120 && uvPerPixel > 0 && uvPerPixel <= 100))
         throw new Error('Provide valid time and voltage scales.');
       if (s.hp != null && s.lp != null && s.hp >= s.lp)
-        throw new Error(
-          'The high-pass cutoff must be below the low-pass cutoff.',
-        );
+        throw new Error('The high-pass cutoff must be below the low-pass cutoff.');
       const h = Math.round(regions.plot.h * capture.video.videoHeight);
       if (rows.some((r) => r.y < 0 || r.y >= h))
-        throw new Error(
-          'Some label rows fall outside the waveform crop. Adjust the regions.',
-        );
+        throw new Error('Some label rows fall outside the waveform crop. Adjust the regions.');
       const match = recognizeMontage(rows.map((r) => r.name));
       if (pendingNewSession) {
         await newHistory('screen');
@@ -629,10 +631,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       $('setup-again').hidden = false;
       $('filters-quick').hidden = false;
       text('source-state', 'Local window capture');
-      text(
-        'montage-name',
-        `${match.name} · ${rows.length} visible derivations`,
-      );
+      text('montage-name', `${match.name} · ${rows.length} visible derivations`);
       worker?.terminate();
       worker = new Worker(new URL('./signal-worker.js', import.meta.url), {
         type: 'module',
@@ -653,9 +652,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
         }
       };
       worker.onerror = () =>
-        suspend(
-          'The local processing worker stopped. Review capture setup to restart.',
-        );
+        suspend('The local processing worker stopped. Review capture setup to restart.');
       worker.postMessage({
         type: 'configure',
         offset: history.end,
@@ -699,12 +696,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       const id = localId;
       persistQueue = persistQueue
         .then(() => archive.invalidateSince(id, start))
-        .catch(() =>
-          text(
-            'storage-state',
-            'Could not update uncertainty in saved history.',
-          ),
-        );
+        .catch(() => text('storage-state', 'Could not update uncertainty in saved history.'));
     }
     render();
   }
@@ -713,16 +705,11 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     const token = operation,
       version = capture.version;
     if (capture.dimensions().join() !== dimensions.join()) {
-      suspend(
-        'The captured window changed size. Confirm the regions and calibration again.',
-      );
+      suspend('The captured window changed size. Confirm the regions and calibration again.');
       return;
     }
     if (reading) return;
-    if (
-      performance.now() - watchAt > 5000 &&
-      (regions.settings || regions.labels)
-    ) {
+    if (performance.now() - watchAt > 5000 && (regions.settings || regions.labels)) {
       reading = true;
       watchAt = performance.now();
       try {
@@ -733,23 +720,19 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
                 settings: await capture.settings(regions.settings),
               },
           next = checked.settings;
-        if (token !== operation || version !== capture.version || !active)
-          return;
+        if (token !== operation || version !== capture.version || !active) return;
         const difference = regions.settings
           ? settingsDifference(watchedDisplay, next)
           : { needsReview: false, changed: [], unreadable: [] };
         const layoutChanged =
-          checked.rows &&
-          checked.rows.map((r) => r.name).join('|') !== confirmedNames;
+          checked.rows && checked.rows.map((r) => r.name).join('|') !== confirmedNames;
         if (difference.needsReview || layoutChanged) {
           markUncertain();
           suspend(
             'Display settings changed or became unreadable. Recent frames are uncertain; confirm the display before resuming.',
             !layoutChanged &&
               difference.unreadable.length === 0 &&
-              difference.changed.every((k) =>
-                ['hp', 'lp', 'notch'].includes(k),
-              ),
+              difference.changed.every((k) => ['hp', 'lp', 'notch'].includes(k)),
           );
           $('confirmed').checked = false;
           lastDetected = next;
@@ -788,9 +771,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       c.width = 0;
       c.height = 0;
     } catch {
-      suspend(
-        'The captured window is unavailable. Re-select the source window.',
-      );
+      suspend('The captured window is unavailable. Re-select the source window.');
     }
   }
   async function demo({
@@ -808,8 +789,16 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     active = true;
     audio.begin(slot);
     $('stop').hidden = false;
-    text('source-state', 'SYNTHETIC · programmed example');
-    text('montage-name', showcase ? '19 electrodes · average reference · synthetic' : 'Longitudinal bipolar · synthetic');
+    text(
+      'source-state',
+      showcase ? 'SYNTHETIC · ' + SAMPLER_LABELS[slot] : 'SYNTHETIC · programmed example',
+    );
+    text(
+      'montage-name',
+      showcase
+        ? '19 electrodes · average reference · synthetic'
+        : 'Longitudinal bipolar · synthetic',
+    );
     const generate = showcase ? showcaseBlock : patientDemoBlock;
     const p = new FeaturePipeline(receive),
       s = { hp: 0.5, lp: 45, notch: 'off' };
@@ -825,8 +814,9 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
         },
         { settings: s, segment: 'demo', source: 'demo' },
       );
+      if (showcase && t + 0.5 === 6) baselineMap.pin(lastFrame);
       if (t % 4 === 0) {
-        status('Building synthetic history · ' + Math.round(100 * t / preload) + '%');
+        status('Building synthetic history · ' + Math.round((100 * t) / preload) + '%');
         await new Promise((resolve) => setTimeout(resolve, 0));
         if (token !== operation) return;
       }
@@ -857,10 +847,15 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       t += 0.5;
       // The demonstrator's known quiet interval is explicit. Real capture
       // has no automatic baseline selection and requires the operator to pin it.
-      if (t === 6) audio.pinBaseline(slot);
+      if (t === 6) {
+        audio.pinBaseline(slot);
+        baselineMap.pin(lastFrame);
+      }
     }, 500);
     status(
-      showcase ? 'Synthetic journey · 2:24 · drag to rotate; scroll to zoom.' : 'Synthetic sound example · 1:24.',
+      showcase
+        ? '12-minute synthetic sampler · programmed examples, not diagnoses.'
+        : 'Synthetic sound example · 1:24.',
     );
   }
   async function refreshSessions() {
@@ -868,13 +863,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     const list = await archive.sessions();
     $('sessions').replaceChildren(
       new Option('Select a session', ''),
-      ...list.map(
-        (s) =>
-          new Option(
-            `${new Date(s.created).toLocaleString()} · ${s.source}`,
-            s.id,
-          ),
-      ),
+      ...list.map((s) => new Option(`${new Date(s.created).toLocaleString()} · ${s.source}`, s.id)),
     );
   }
   async function restore() {
@@ -911,11 +900,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     if (!id) return;
     detailTimer = setTimeout(async () => {
       try {
-        const frames = await archive.frames(
-          id,
-          Math.max(0, focus - 10),
-          focus + 10,
-        );
+        const frames = await archive.frames(id, Math.max(0, focus - 10), focus + 10);
         if (localId === id && Number($('time').value) === focus) {
           historyDetail = frames;
           render();
@@ -971,6 +956,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
   };
   $('stop').onclick = stop;
   $('guide').onclick = () => $('help').showModal();
+  $('color-mode').onchange = render;
   $('panel-details').onclick = () => {
     const open = root.classList.toggle('controls-open');
     $('panel-details').setAttribute('aria-expanded', String(open));
@@ -981,8 +967,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     ensureField().lens($('fov').value);
     text('fov-value', $('fov').value + '°');
   };
-  for (const id of ['cut', 'time-lens', 'statistic', 'occupancy-threshold'])
-    $(id).oninput = render;
+  for (const id of ['cut', 'time-lens', 'statistic', 'occupancy-threshold']) $(id).oninput = render;
   $('scale').oninput = () => {
     text('scale-value', $('scale').value + ' µV');
     render();
@@ -1023,10 +1008,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       return;
     }
     markUncertain();
-    suspend(
-      'Filter review: this patient is paused; other patients continue.',
-      true,
-    );
+    suspend('Filter review: this patient is paused; other patients continue.', true);
     const proposed = lastDetected || settings();
     for (const k of ['hp', 'lp']) $('quick-' + k).value = proposed[k] ?? '';
     $('quick-notch').value = ['off', '50', '60'].includes(proposed.notch)
@@ -1043,8 +1025,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     const s = {
       hp: number('quick-hp'),
       lp: number('quick-lp'),
-      notch:
-        $('quick-notch').value === 'unknown' ? null : $('quick-notch').value,
+      notch: $('quick-notch').value === 'unknown' ? null : $('quick-notch').value,
     };
     if (
       !$('quick-confirm').checked ||
@@ -1061,16 +1042,11 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     for (const k of ['hp', 'lp']) $(k).value = s[k] ?? '';
     $('notch').value = s.notch ?? 'unknown';
     if (lastDetected)
-      for (const k of ['hp', 'lp', 'notch'])
-        if (lastDetected[k] != null) lastDetected[k] = s[k];
+      for (const k of ['hp', 'lp', 'notch']) if (lastDetected[k] != null) lastDetected[k] = s[k];
     $('confirmed').checked = true;
     await begin();
     if (active) $('quick-filters').close();
-    else
-      text(
-        'quick-status',
-        'Capture could not resume. Use full setup to review the source.',
-      );
+    else text('quick-status', 'Capture could not resume. Use full setup to review the source.');
   };
   $('quick-full').onclick = () => {
     $('quick-filters').close();
@@ -1098,10 +1074,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
   };
   $('calibrate').onclick = () => {
     calibration = [];
-    text(
-      'setup-status',
-      'Click the two vertical endpoints of the voltage calibration bar.',
-    );
+    text('setup-status', 'Click the two vertical endpoints of the voltage calibration bar.');
   };
   $('setup').addEventListener('cancel', () => {
     if (!active) stop();
@@ -1114,16 +1087,11 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     if ($('save-local').checked) beginSave();
     else {
       localId = null;
-      text(
-        'storage-state',
-        'New history is memory-only. Existing saved sessions are retained.',
-      );
+      text('storage-state', 'New history is memory-only. Existing saved sessions are retained.');
     }
   };
   $('restore').onclick = () =>
-    restore().catch(() =>
-      text('storage-state', 'This local session could not be opened.'),
-    );
+    restore().catch(() => text('storage-state', 'This local session could not be opened.'));
   $('erase').onclick = async () => {
     const id = $('sessions').value;
     if (!id) return;
@@ -1159,7 +1127,13 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
     stop,
     time: () => history.end,
     hasCapture: () => Boolean(capture.stream),
-    demoLabel: () => demoKind === 'showcase' ? showcasePhase(history.end) : null,
+    pinBaseline: () => {
+      if (!audio.pinBaseline(slot)) return false;
+      const ok = baselineMap.pin(lastFrame);
+      render();
+      return ok;
+    },
+    demoLabel: () => (demoKind === 'showcase' ? showcasePhase(history.end, slot) : null),
     setVisible(value) {
       visible = value;
       root.hidden = !value;
@@ -1176,13 +1150,7 @@ export function mountPatient(root, audio, slot, onState = () => {}) {
       if (value) render();
     },
     lock(value) {
-      for (const id of [
-        'capture',
-        'demo',
-        'restore',
-        'setup-again',
-        'filters-quick',
-      ])
+      for (const id of ['capture', 'demo', 'restore', 'setup-again', 'filters-quick'])
         $(id).disabled = value;
     },
   };

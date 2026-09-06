@@ -127,12 +127,7 @@ header {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: radial-gradient(
-    circle at 35% 30%,
-    #9febe0,
-    #496eab 50%,
-    #16233a 72%
-  );
+  background: radial-gradient(circle at 35% 30%, #9febe0, #496eab 50%, #16233a 72%);
   box-shadow: 0 0 18px #6d99e04a;
 }
 [data-id='source-state'] {
@@ -206,6 +201,30 @@ main {
   font-size: 0.75rem;
   color: #adbdce;
   pointer-events: none;
+}
+.demo-events {
+  color: #adbdce;
+  font-size: 0.72rem;
+  margin: 0.35rem 0 0.65rem;
+}
+.demo-event-track {
+  position: relative;
+  height: 7px;
+  margin-top: 0.3rem;
+  background: #16202e;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.demo-event-track span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: #f7b368;
+}
+.viewbar select {
+  width: auto;
+  max-width: 100%;
+  font-size: 0.8rem;
 }
 [data-id='view-label'] {
   position: absolute;
@@ -647,54 +666,196 @@ body.exercise-active .patient-card [data-action='baseline'] {
 }
 
 /* Keep the field and immediate actions prominent; details stay available on demand. */
-#monitor-message:empty { display: none; }
-.toolbar-more { position: relative; }
-.toolbar-more[open] > .actions { padding: .6rem 0; }
-summary { cursor: pointer; font-size: .875rem; min-height: 42px; padding: .55rem 0; }
-aside > details { border-bottom: 1px solid var(--border); padding: .5rem 1rem; }
-aside > details > label { margin-bottom: .8rem; }
-aside { display: flex; flex-direction: column; }
-.capture-feedback { order: -1; }
-.patient-source { display: none; }
-.patient-card .pattern-state:empty, .patient-card .script-state:empty { display: none; }
-.patient-card details { margin: 0; }
-.patient-card details > label { margin-top: .6rem; }
-.sound-options > .mixer-controls { padding: .5rem; }
-[data-id='capture-status'] { margin: .5rem 0; overflow-wrap: anywhere; }
-[data-id='panel-details'] { display: none; }
-.orientation { font-size: .75rem; max-width: calc(100% - 2rem); }
-.quadrants #patients { display: none; }
-.quadrants #panels { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .5rem; padding: .5rem; }
-.quadrants .patient-panel { min-width: 0; border: 1px solid var(--patient-color); border-radius: 8px; overflow: hidden; }
-.quadrants .patient-card { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .1rem .5rem; margin: 0; padding: .35rem .6rem; border: 0; border-radius: 0; }
-.quadrants .patient-card > button { grid-column: 1; gap: .5rem; min-height: 30px; padding: 0; }
-.quadrants .patient-card b { font-size: 1rem; }
-.quadrants .patient-card .patient-state { grid-column: 1; font-size: .875rem; }
-.quadrants .patient-card .actions { grid-column: 2; grid-row: 1 / 3; align-self: center; }
-.quadrants .patient-card .pattern-state, .quadrants .patient-card .script-state,
-.quadrants .patient-card .patient-levels, .quadrants .patient-card > details { display: none; }
-.quadrants .controls-open .patient-card > details { display: block; grid-column: 1 / -1; }
-.quadrants .patient-panel > header { padding: .25rem .6rem; gap: .5rem; }
-.quadrants [data-patient-heading] { display: none; }
-.quadrants .patient-panel > header .actions { margin-left: auto; gap: .25rem; }
-.quadrants .patient-panel > header button { font-size: .875rem; padding: .35rem .5rem; }
-.quadrants .patient-panel > header [data-id='demo'], .quadrants .patient-panel > header [data-id='guide'] { display: none; }
-.quadrants [data-id='panel-details'] { display: inline-block; }
-.quadrants .patient-panel main { display: block; }
-.quadrants .patient-panel aside, .quadrants .navigation { display: none; }
-.quadrants .controls-open aside, .quadrants .controls-open .navigation { display: flex; }
-.quadrants .field-workspace { padding: .35rem .6rem; }
-.quadrants .viewbar { gap: .25rem; }
-.quadrants .segmented button { font-size: .875rem; padding: .25rem .5rem; }
-.quadrants [data-id='renderer-state'] { display: none; }
-.quadrants [data-id='stage'] { height: max(180px,calc((100vh - 620px)/2)); min-height: 180px; margin-top: .2rem; border-radius: 5px; }
-.quadrants .time-control { margin: .3rem 0; }
-.quadrants .time-control > .muted { display: none; }
-.quadrants .band-controls { margin-top: .2rem; gap: .2rem; }
-.quadrants .band-controls button { font-size: .75rem; min-height: 32px; padding: .2rem .35rem; }
-.quadrants [data-id='view-label'] { bottom: .45rem; left: .5rem; right: .5rem; }
-.quadrants .orientation { top: .45rem; left: .5rem; max-width: calc(100% - 1rem); }
+#monitor-message:empty {
+  display: none;
+}
+.toolbar-more {
+  position: relative;
+}
+.toolbar-more[open] > .actions {
+  padding: 0.6rem 0;
+}
+summary {
+  cursor: pointer;
+  font-size: 0.875rem;
+  min-height: 42px;
+  padding: 0.55rem 0;
+}
+aside > details {
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+}
+aside > details > label {
+  margin-bottom: 0.8rem;
+}
+aside {
+  display: flex;
+  flex-direction: column;
+}
+.capture-feedback {
+  order: -1;
+}
+.patient-source {
+  display: none;
+}
+.patient-card .pattern-state:empty,
+.patient-card .script-state:empty {
+  display: none;
+}
+.patient-card details {
+  margin: 0;
+}
+.patient-card details > label {
+  margin-top: 0.6rem;
+}
+.sound-options > .mixer-controls {
+  padding: 0.5rem;
+}
+[data-id='capture-status'] {
+  margin: 0.5rem 0;
+  overflow-wrap: anywhere;
+}
+[data-id='panel-details'] {
+  display: none;
+}
+.orientation {
+  font-size: 0.75rem;
+  max-width: calc(100% - 2rem);
+}
+.quadrants #patients {
+  display: none;
+}
+.quadrants #panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+.quadrants .patient-panel {
+  min-width: 0;
+  border: 1px solid var(--patient-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.quadrants .patient-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.1rem 0.5rem;
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  border: 0;
+  border-radius: 0;
+}
+.quadrants .patient-card > button {
+  grid-column: 1;
+  gap: 0.5rem;
+  min-height: 30px;
+  padding: 0;
+}
+.quadrants .patient-card b {
+  font-size: 1rem;
+}
+.quadrants .patient-card .patient-state {
+  grid-column: 1;
+  font-size: 0.875rem;
+}
+.quadrants .patient-card .actions {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+}
+.quadrants .patient-card .pattern-state,
+.quadrants .patient-card .script-state,
+.quadrants .patient-card .patient-levels,
+.quadrants .patient-card > details {
+  display: none;
+}
+.quadrants .controls-open .patient-card > details {
+  display: block;
+  grid-column: 1 / -1;
+}
+.quadrants .patient-panel > header {
+  padding: 0.25rem 0.6rem;
+  gap: 0.5rem;
+}
+.quadrants [data-patient-heading] {
+  display: none;
+}
+.quadrants .patient-panel > header .actions {
+  margin-left: auto;
+  gap: 0.25rem;
+}
+.quadrants .patient-panel > header button {
+  font-size: 0.875rem;
+  padding: 0.35rem 0.5rem;
+}
+.quadrants .patient-panel > header [data-id='demo'],
+.quadrants .patient-panel > header [data-id='guide'] {
+  display: none;
+}
+.quadrants [data-id='panel-details'] {
+  display: inline-block;
+}
+.quadrants .patient-panel main {
+  display: block;
+}
+.quadrants .patient-panel aside,
+.quadrants .navigation {
+  display: none;
+}
+.quadrants .controls-open aside,
+.quadrants .controls-open .navigation {
+  display: flex;
+}
+.quadrants .field-workspace {
+  padding: 0.35rem 0.6rem;
+}
+.quadrants .viewbar {
+  gap: 0.25rem;
+}
+.quadrants .segmented button {
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
+}
+.quadrants [data-id='renderer-state'] {
+  display: none;
+}
+.quadrants [data-id='stage'] {
+  height: max(180px, calc((100vh - 620px) / 2));
+  min-height: 180px;
+  margin-top: 0.2rem;
+  border-radius: 5px;
+}
+.quadrants .time-control {
+  margin: 0.3rem 0;
+}
+.quadrants .time-control > .muted {
+  display: none;
+}
+.quadrants .band-controls {
+  margin-top: 0.2rem;
+  gap: 0.2rem;
+}
+.quadrants .band-controls button {
+  font-size: 0.75rem;
+  min-height: 32px;
+  padding: 0.2rem 0.35rem;
+}
+.quadrants [data-id='view-label'] {
+  bottom: 0.45rem;
+  left: 0.5rem;
+  right: 0.5rem;
+}
+.quadrants .orientation {
+  top: 0.45rem;
+  left: 0.5rem;
+  max-width: calc(100% - 1rem);
+}
 @media (max-width: 850px) {
-  .quadrants #panels { grid-template-columns: minmax(0,1fr); }
-  .quadrants [data-id='stage'] { height: 280px; }
+  .quadrants #panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .quadrants [data-id='stage'] {
+    height: 280px;
+  }
 }
