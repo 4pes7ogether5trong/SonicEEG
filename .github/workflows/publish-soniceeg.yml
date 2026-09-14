@@ -1,11 +1,12 @@
 name: Publish SonicEEG
 
 on:
-  push:
+  # Run after the repository's existing branch-based Pages publisher so its
+  # older prototype cannot overwrite this application's deployment.
+  workflow_run:
+    workflows: ['pages build and deployment']
     branches: [main]
-    paths:
-      - 'web/**'
-      - '.github/workflows/publish-soniceeg.yml'
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -17,6 +18,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -24,6 +26,8 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -33,7 +37,7 @@ jobs:
       - run: npm run check
       - run: npm run build
       - name: Mark the published source revision
-        run: node -e 'require("node:fs").writeFileSync("dist/release.json", JSON.stringify({commit:process.env.GITHUB_SHA,builtAt:new Date().toISOString()},null,2))'
+        run: node -e 'require("node:fs").writeFileSync("dist/release.json", JSON.stringify({commit:require("node:child_process").execFileSync("git",["rev-parse","HEAD"],{encoding:"utf8"}).trim(),builtAt:new Date().toISOString()},null,2))'
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist
