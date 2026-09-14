@@ -1,0 +1,5 @@
+node_modules/
+dist/
+browser/public/ocr/
+browser/public/licenses/
+eeg_visualizer_mvp/web/bundle.js*

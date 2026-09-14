@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Synchronized EEG waveforms, spectral space, sound and comparison in one local-first workspace."
+    />
+    <title>SonicEEG · Signal Observatory</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="brand" href="./"
+        ><span class="brand-mark" aria-hidden="true">∿</span
+        ><span>Sonic<span class="accent">EEG</span><small>SIGNAL OBSERVATORY</small></span></a
+      >
+      <div class="header-note">
+        Look closely. Listen carefully.<span>Research prototype · v0.2</span>
+      </div>
+      <button id="help-open" class="quiet">Mapping guide <span aria-hidden="true">↗</span></button>
+    </header>
+    <main>
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+      <section class="source-controls toolbar" aria-label="Recording and playback">
+        <label class="source-label"
+          >Recording<select id="source">
+            <option value="alert">01 · Alert / eyes open</option>
+            <option value="drowsy">02 · Eyes closed / drowsy</option>
+            <option value="bursts">03 · Brief evolving rhythms</option>
+            <option value="local" disabled>Imported recording</option>
+            <option value="stream">Local Python pipeline</option>
+          </select></label
+        >
+        <button id="import-open">Open recording</button><span class="toolbar-divider"></span>
+        <button id="play" class="primary" aria-label="Play recording">▶ Play</button>
+        <label
+          >Speed<select id="speed">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select></label
+        >
+        <label
+          >Analysis window<select id="window">
+            <option value="2">2 seconds</option>
+            <option value="4">4 seconds</option>
+            <option value="8">8 seconds</option>
+          </select></label
+        >
+        <button id="study-open" class="push-right">Compare the interfaces</button>
+      </section>
+      <section class="transport source-controls" aria-label="Recording position">
+        <div class="timeline-top">
+          <span id="source-kind" class="pill">SYNTHETIC DEMONSTRATION</span
+          ><span id="recording-description"></span
+          ><span id="clock" class="mono">00:02 / 01:40</span>
+        </div>
+        <input
+          id="seek"
+          aria-label="Recording playhead, seconds"
+          type="range"
+          min="2"
+          max="100"
+          step="0.05"
+          value="2"
+        />
+        <div id="epochs" class="epochs" aria-label="Ten second epochs"></div>
+        <div class="timeline-bottom">
+          <label class="check"
+            ><input id="annotations" type="checkbox" checked />Programmed annotations</label
+          ><span id="event-text">No programmed event in this window</span>
+        </div>
+      </section>
+
+      <section
+        id="study-panel"
+        class="study-panel"
+        hidden
+        aria-label="Interface comparison protocol"
+      >
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">INTERFACE COMPARISON</span>
+            <h2 id="study-title">A small, controlled listening experiment</h2>
+          </div>
+          <button id="study-close">Close protocol</button>
+        </div>
+        <div id="study-setup">
+          <p>
+            Compare raw traces, raw + 3D, raw + sound, and all three. Twelve 10-second clips use new
+            synthetic seeds. Each condition includes an evolving target, a blink control, and a
+            non-evolving temporal rhythm. Answer whether you see or hear a focal evolving rhythm.
+          </p>
+          <p class="muted">
+            Condition order is balanced across four groups. Programmed labels stay hidden during
+            trials. This tests interface feasibility; it does not establish diagnostic accuracy. A
+            two-second context window precedes each clip.
+          </p>
+          <div class="inline">
+            <label
+              >Order group<select id="study-group">
+                <option>1</option>
+                <option>2</option>
+                <option>3</option>
+                <option>4</option>
+              </select></label
+            ><label
+              >Session seed<input
+                id="study-seed"
+                type="number"
+                min="1"
+                max="9999999"
+                value="2026" /></label
+            ><button id="study-start" class="primary">Start 12 trials · enable audio</button>
+          </div>
+        </div>
+        <div id="study-active" hidden>
+          <div class="trial-strip">
+            <strong id="trial-label"></strong><span id="trial-clock" class="mono"></span
+            ><span id="trial-state"></span>
+          </div>
+          <div id="trial-response" hidden>
+            <span>Focal evolving rhythm?</span><button id="answer-yes">Present</button
+            ><button id="answer-no">Absent</button
+            ><label
+              >Confidence<select id="confidence">
+                <option value="1">1 · Low</option>
+                <option value="2">2</option>
+                <option value="3" selected>3 · Moderate</option>
+                <option value="4">4</option>
+                <option value="5">5 · High</option>
+              </select></label
+            >
+          </div>
+          <button id="trial-next" class="primary" hidden>Next trial</button>
+        </div>
+        <div id="study-results" hidden></div>
+        <div id="study-exports" hidden class="inline">
+          <button id="export-study-json">Export trial data · JSON</button
+          ><button id="export-study-csv">Export trial data · CSV</button>
+        </div>
+      </section>
+
+      <div class="workspace">
+        <section class="panel visual-panel" aria-label="Three dimensional EEG spectral view">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">01 / SPECTRAL SPACE</span>
+              <h1>Signal field</h1>
+            </div>
+            <div class="segmented" aria-label="3D view">
+              <button id="mode-field" class="active" aria-pressed="true">Channels</button
+              ><button id="mode-history" aria-pressed="false">20 s history</button>
+            </div>
+            <button id="reset-camera" class="quiet" title="Reset 3D camera">Reset view</button>
+          </div>
+          <div id="field" class="field">
+            <div class="field-caption">
+              <span id="field-status">Starting 3D renderer…</span
+              ><span id="field-detail">Fixed channel layout · logarithmic frequency</span>
+            </div>
+            <div id="field-unavailable" class="field-fallback" hidden></div>
+            <div id="condition-cover" class="condition-cover" hidden>
+              3D is hidden in this trial condition.<small>Use the raw traces below.</small>
+            </div>
+            <div class="navigation-hint">
+              Drag to orbit <span>·</span> Scroll to zoom <span>·</span> Right-drag to pan
+            </div>
+            <div id="point-readout" class="point-readout">
+              Select a point to inspect its measurement
+            </div>
+          </div>
+          <div class="visual-footer">
+            <div id="band-legend" class="band-legend"></div>
+            <span
+              ><span id="power-scale-caption">Dot radius: −30 to +30 dB re 1 µV²/Hz</span
+              ><span class="muted"> · white = selected channel · gray = reference A</span></span
+            >
+          </div>
+        </section>
+        <aside class="panel inspector" aria-label="Selected channel and sound">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">02 / INSPECT & LISTEN</span>
+              <h2>One signal, every view</h2>
+            </div>
+          </div>
+          <div class="inspector-body">
+            <label class="channel-label">Selected channel<select id="channel"></select></label>
+            <div id="channel-metrics" class="metrics">
+              <div><span>Peak frequency</span><strong id="metric-peak">—</strong></div>
+              <div><span>RMS amplitude</span><strong id="metric-rms">—</strong></div>
+              <div><span>95% spectral edge</span><strong id="metric-sef">—</strong></div>
+              <div><span>Peak concentration</span><strong id="metric-rhythm">—</strong></div>
+            </div>
+            <div id="analysis-details">
+              <canvas
+                id="spectrum"
+                aria-label="Selected channel power spectrum, fixed logarithmic power scale"
+                role="img"
+              ></canvas>
+              <div id="band-values" class="band-values"></div>
+              <p id="quality" class="quality"></p>
+            </div>
+            <fieldset id="sound-controls">
+              <legend>Sonification</legend>
+              <div class="inline sound-heading">
+                <button id="audio-toggle" aria-pressed="false">Enable sound</button
+                ><span id="audio-state" class="muted">Off · start quietly</span>
+              </div>
+              <label
+                >Mapping<select id="audio-mode">
+                  <option value="bands">Band orchestra · fixed carriers</option>
+                  <option value="focus">Channel focus · frequency × 32</option>
+                </select></label
+              ><label class="check"
+                ><input id="audio-isolate" type="checkbox" />Listen to selected channel only</label
+              ><label class="volume-label"
+                >Volume<input
+                  id="volume"
+                  type="range"
+                  min="0"
+                  max="0.6"
+                  step="0.01"
+                  value="0.25"
+                /><output id="volume-value">25%</output></label
+              ><label class="check"
+                ><input id="quality-gate" type="checkbox" checked />Mute channels with integrity
+                flags</label
+              >
+              <p class="muted tiny">
+                Stereo follows hemisphere. Volume follows calibrated amplitude. Sound pauses with
+                playback.
+              </p>
+            </fieldset>
+          </div>
+        </aside>
+        <section class="panel traces-panel" aria-label="Raw EEG waveforms">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">03 / RAW SIGNAL</span>
+              <h2>Voltage over time</h2>
+            </div>
+            <div class="trace-controls">
+              <label
+                >Shared scale<select id="trace-scale">
+                  <option value="25">±25 µV</option>
+                  <option value="50" selected>±50 µV</option>
+                  <option value="100">±100 µV</option>
+                  <option value="250">±250 µV</option>
+                </select></label
+              ><label
+                >Channels<select id="montage">
+                  <option value="all">All channels</option>
+                  <option value="19">19-channel view</option>
+                </select></label
+              ><label class="check"
+                ><input id="dc-remove" type="checkbox" checked />Remove DC</label
+              >
+            </div>
+          </div>
+          <div class="trace-scroll">
+            <canvas
+              id="traces"
+              role="img"
+              aria-label="Multichannel raw EEG, positive voltage upward, shared voltage scale. Red marks indicate clipped display values."
+            ></canvas>
+          </div>
+          <div class="trace-footer">
+            <span id="trace-caption"></span
+            ><span>Positive up · gaps stay open · red = display clipping</span>
+          </div>
+        </section>
+        <section class="panel comparison-panel" aria-label="Window comparison">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">04 / WINDOW COMPARISON</span>
+              <h2>Reference A → current B</h2>
+            </div>
+            <button id="pin">Pin current as A</button
+            ><button id="clear-pin" class="quiet" hidden>Clear</button>
+          </div>
+          <div class="comparison-body">
+            <p id="comparison-summary" class="muted">
+              Pin a window, then seek to another moment. Matching scales make changes visible.
+            </p>
+            <div id="comparison-values"></div>
+            <div class="export-actions">
+              <button id="export-window">Export this window</button
+              ><button id="export-recording">Export recording</button>
+            </div>
+          </div>
+        </section>
+      </div>
+      <footer class="page-footer">
+        <span id="measurement-note"
+          >Hann periodogram · 0.5–45 Hz · 2 s window · 512 Hz sampling</span
+        ><span>Local processing · no recording upload · no diagnostic classifier</span>
+      </footer>
+    </main>
+    <dialog id="import-dialog">
+      <form id="import-form">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">LOCAL RECORDING</span>
+            <h2>Bring your own signal</h2>
+          </div>
+          <button type="button" id="import-close" class="quiet">Close</button>
+        </div>
+        <p>
+          Open deidentified JSON, CSV or TSV. Samples stay in this browser. EDF, BDF, NPY and
+          calibrated screen capture remain available through the local Python pipeline.
+        </p>
+        <label
+          >Recording file<input id="import-file" type="file" accept=".json,.csv,.tsv" required
+        /></label>
+        <div class="inline">
+          <label
+            >CSV sampling rate (Hz)<input
+              id="import-rate"
+              type="number"
+              min="16"
+              max="4096"
+              value="512"
+              required /></label
+          ><label
+            >CSV voltage unit<select id="import-unit">
+              <option value="uV">Microvolts · µV</option>
+              <option value="mV">Millivolts · mV</option>
+              <option value="V">Volts · V</option>
+              <option value="relative">Uncalibrated / relative</option>
+            </select></label
+          >
+        </div>
+        <label
+          >Reference / montage name (optional)<input
+            id="import-reference"
+            maxlength="120"
+            placeholder="For example: linked ears or common average"
+        /></label>
+        <p class="muted tiny">
+          JSON: channel_names, sample_rate_hz, unit, data as channels × samples; null represents a
+          gap. CSV: channel header, rows of samples, optional regular time column. Maximum 12
+          million samples and 80 MB.
+        </p>
+        <p id="import-error" role="alert"></p>
+        <button type="submit" class="primary">Open locally</button>
+      </form>
+    </dialog>
+    <dialog id="help-dialog">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">MEASUREMENT GRAMMAR</span>
+          <h2>Every change has a meaning</h2>
+        </div>
+        <button id="help-close" class="quiet">Close</button>
+      </div>
+      <p>
+        Rotate the signal field freely. Its positions and measurements do not change with the
+        camera, age or playback speed.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Channel position</td>
+            <td>Fixed abstract bilateral layout. Not a head model or source localization.</td>
+          </tr>
+          <tr>
+            <td>Vertical position</td>
+            <td>Frequency, logarithmic from 0.5 to 45 Hz.</td>
+          </tr>
+          <tr>
+            <td>Dot size</td>
+            <td>
+              Power density on a fixed logarithmic scale; clipped below −30 and above +30 dB. Exact
+              values remain in the spectrum and export.
+            </td>
+          </tr>
+          <tr>
+            <td>Dot color</td>
+            <td>
+              Frequency band; selected channel is white. Gray dots show reference A with a small
+              display offset.
+            </td>
+          </tr>
+          <tr>
+            <td>History view</td>
+            <td>
+              Selected channel: time across, frequency upward, power in depth. Gaps in time are
+              preserved.
+            </td>
+          </tr>
+          <tr>
+            <td>Band orchestra</td>
+            <td>
+              Delta 110, theta 220, alpha 440, beta 880, gamma 1760 Hz. Mean band power per
+              hemisphere becomes acoustic gain via its square root.
+            </td>
+          </tr>
+          <tr>
+            <td>Channel focus</td>
+            <td>Pitch is measured peak frequency × 32; acoustic gain follows RMS voltage.</td>
+          </tr>
+          <tr>
+            <td>Raw trace</td>
+            <td>
+              Shared voltage scale. Pixel envelopes retain extrema; red marks show display clipping.
+              DC removal subtracts the window mean.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        RMS uses the mean-removed full window. Spectral metrics use a one-sided Hann periodogram
+        over 0.5–45 Hz (limited by Nyquist). “Peak concentration” is the fraction near the largest
+        spectral bin, not neuronal synchrony or a clinical confidence score.
+      </p>
+      <p>
+        Absolute sound and comparison need calibrated units. Missing samples invalidate that
+        channel’s spectrum. Unrecognized labels receive an outer position and centered sound; no
+        anatomy is inferred. Age is context only in the local pipeline.
+      </p>
+      <p class="muted">
+        The three recordings are illustrative synthetic mixtures: 25 channels, 512 Hz, 100 seconds
+        each. Programmed BIRD-like and RMTD-like patterns are test targets, not expert-validated
+        clinical exemplars. Interface trial results describe this exercise only.
+      </p>
+    </dialog>
+    <script type="module" src="./bundle.js"></script>
+  </body>
+</html>

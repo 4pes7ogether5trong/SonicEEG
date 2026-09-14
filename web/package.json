@@ -1,0 +1,24 @@
+{
+  "name": "soniceeg-analysis",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node browser/build-assets.mjs && vite build && node scripts/build-web.mjs",
+    "test": "node --test browser/tests/*.test.mjs",
+    "dev": "vite",
+    "test:previous": "node --test eeg_visualizer_mvp/web/tests/*.test.js",
+    "check": "node browser/check.mjs"
+  },
+  "dependencies": {
+    "three": "0.183.0",
+    "tesseract.js": "6.0.1",
+    "@tesseract.js-data/eng": "1.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "prettier": "^3.6.2",
+    "vite": "6.4.2",
+    "fake-indexeddb": "6.0.0"
+  }
+}
