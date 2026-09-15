@@ -1,6 +1,7 @@
 import { ChannelCoverage } from './channel-coverage.js';
 import { TraceMonitor } from './trace-monitor.js';
-import { drawTraceMonitor } from './trace-view.js';
+import { drawTraceMonitor, traceDisplayScale } from './trace-view.js';
+import { recentTraceQuality } from './capture-quality.js';
 import { BANDS, AMPLITUDE_THRESHOLDS, prevalence } from './signal.js';
 import { parseDerivation, recognizeMontage } from './montage.js';
 import { suggestMontageLabels } from './montage-inference.js';
@@ -273,6 +274,38 @@ export function mountPatient(
         : Math.max(0, (coverageStopped ?? performance.now() / 1000) - traceArrival);
     const traces = traceMonitor.snapshot(traceAge > 2.5 || !active ? traceAge : 0);
     const byName = new Map(traces.map((r) => [r.name, r]));
+    const quality = recentTraceQuality(traces);
+    $('capture-quality').hidden = source !== 'screen';
+    const fresh = active && traceAge < 2.5;
+    text(
+      'capture-quality-title',
+      !active
+        ? 'Capture stopped'
+        : !quality.expectedSeconds
+          ? 'Waiting for newly captured columns'
+          : !fresh
+            ? 'Waiting for fresh capture'
+            : quality.duration < 2
+              ? 'Building the first analysis window'
+              : !current
+                ? 'Trace fragments only · analysis unavailable'
+                : current < rows.length
+                  ? `Partial coverage · ${current}/${rows.length} channels ready for analysis`
+                  : `${current}/${rows.length} channels ready for analysis`,
+    );
+    const qualityText = quality.expectedSeconds
+      ? `Last ${quality.duration.toFixed(1)}s · ink ${(100 * quality.observed).toFixed(1)}% · repaired ${(100 * quality.repaired).toFixed(1)}% · missing ${(100 * quality.missing).toFixed(1)}%`
+      : 'Waiting for newly captured columns';
+    text('capture-quality-values', qualityText);
+    $('capture-quality-bar').setAttribute('aria-label', qualityText);
+    for (const [id, fraction] of [
+      ['quality-ink', quality.observed],
+      ['quality-repaired', quality.repaired],
+      ['quality-missing', quality.missing],
+    ])
+      $(id).style.width = `${Math.max(0, Math.min(100, fraction * 100))}%`;
+    $('capture-quality').classList.toggle('incomplete', current < rows.length || !fresh);
+    $('capture-quality-advice').hidden = !active || quality.duration < 2 || current === rows.length;
     text(
       'coverage-summary',
       rows.length
@@ -283,7 +316,7 @@ export function mountPatient(
     text(
       'coverage-period',
       rows.length
-        ? `Analysis coverage from ${format(captureCoverage.start)} · ${rows[0].elapsed.toFixed(1)}s elapsed. Trace ink counts visible path samples separately, excluding repairs; it does not verify identity at overlaps. Only complete, qualified windows count for analysis, dome and sound. Derived channels do not count.`
+        ? `Analysis coverage from ${format(captureCoverage.start)} · ${rows[0].elapsed.toFixed(1)}s elapsed. Ink and repaired samples are separate; neither verifies channel identity at overlaps. Missing samples stay in the denominator. Only complete, qualified windows count for analysis, dome and sound. Derived channels do not count.`
         : 'Coverage begins with capture. Quiet, valid measurements count as usable.',
     );
     const baseNames = audio.trackers[slot].baseline;
@@ -310,6 +343,10 @@ export function mountPatient(
               ? 'Trace only'
               : 'Unavailable',
           trace ? `${trace.percent.toFixed(1)}%` : '—',
+          trace?.elapsed ? `${((100 * trace.repaired) / trace.elapsed).toFixed(1)}%` : '—',
+          trace?.elapsed
+            ? `${Math.max(0, 100 - (100 * (trace.ink + trace.repaired)) / trace.elapsed).toFixed(1)}%`
+            : '—',
           `${r.percent.toFixed(1)}%`,
           `${r.usable.toFixed(1)}s`,
           `${r.longestGap.toFixed(1)}s`,
@@ -325,7 +362,9 @@ export function mountPatient(
       }),
     );
     if ($('trace-inspection').open)
-      drawTraceMonitor($('trace-canvas'), traces, { scale: Number($('scale').value) || 80 });
+      drawTraceMonitor($('trace-canvas'), traces, {
+        scale: traceDisplayScale(traces, Number($('trace-scale').value)),
+      });
     const staleView =
       source === 'screen' && lost && mode === 'live' && $('follow').checked && !paused;
     $('stage').classList.toggle('capture-unavailable', staleView);
@@ -333,6 +372,7 @@ export function mountPatient(
     return { current, total: rows.length };
   }
   $('trace-inspection').addEventListener('toggle', renderCoverage);
+  $('trace-scale').addEventListener('change', renderCoverage);
   function visibleFrame() {
     if (paused && frozenFrame) return frozenFrame;
     return $('follow').checked

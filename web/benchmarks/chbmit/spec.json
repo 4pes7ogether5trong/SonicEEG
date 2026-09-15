@@ -1,0 +1,135 @@
+{
+  "experiment": "CHB-MIT controlled sweep reconstruction, fixed conditions before scoring",
+  "record": "chb01_03.edf",
+  "source_url": "https://physionet.org/files/chbmit/1.0.0/chb01/chb01_03.edf",
+  "annotation_url": "https://physionet.org/files/chbmit/1.0.0/chb01/chb01-summary.txt",
+  "source_sha256": "4c4a95a9b4331aeaadadd538763eb2e735950d9aa615b85ee6246c784be8ae90",
+  "start_s": 2960,
+  "end_s": 3070,
+  "annotated_seizure_s": [
+    2996,
+    3036
+  ],
+  "width": 1800,
+  "seconds_per_page": 10,
+  "fps": 2,
+  "initial_cursor_px": 6,
+  "cursor_width_px": 3,
+  "negative_up": true,
+  "supersampling": 2,
+  "trace_width_px": 1,
+  "trace_rgb": [
+    28,
+    32,
+    38
+  ],
+  "grid_rgb": [
+    232,
+    232,
+    232
+  ],
+  "cursor_rgb": [
+    220,
+    190,
+    0
+  ],
+  "conditions": [
+    {
+      "id": "isolated_2uv",
+      "channel_indices": [
+        1
+      ],
+      "height": 512,
+      "baseline_px": 256,
+      "row_spacing_px": 40,
+      "uv_per_pixel": 2
+    },
+    {
+      "id": "dense_2uv",
+      "channel_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "height": 760,
+      "baseline_px": 40,
+      "row_spacing_px": 40,
+      "uv_per_pixel": 2
+    },
+    {
+      "id": "dense_6uv",
+      "channel_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "height": 760,
+      "baseline_px": 40,
+      "row_spacing_px": 40,
+      "uv_per_pixel": 6
+    }
+  ],
+  "scoring": {
+    "reference": "Original physical samples linearly interpolated at exact screen column times; no additional filtering, rescaling, centering or lag optimization",
+    "observed": "Production traceBlock observed=1, finite value",
+    "repaired": "Production traceBlock observed=2, finite value; scored separately",
+    "missing": "Every expected column with no finite observed or repaired output, including rejected blocks",
+    "epochs": [
+      [
+        "before_annotation",
+        2960,
+        2996
+      ],
+      [
+        "annotated_seizure",
+        2996,
+        3036
+      ],
+      [
+        "after_annotation",
+        3036,
+        3070
+      ]
+    ],
+    "statistics": [
+      "coverage",
+      "RMSE_uV",
+      "MAE_uV",
+      "P95_absolute_error_uV",
+      "Pearson_r",
+      "longest_missing_run_s",
+      "production_feature_valid_fraction"
+    ]
+  },
+  "baseline_revision": "ab6485b"
+}

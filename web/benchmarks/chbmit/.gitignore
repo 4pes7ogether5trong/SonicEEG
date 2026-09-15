@@ -1,0 +1,4 @@
+source/*.edf
+source/*.npz
+results/
+deps/

@@ -1023,6 +1023,61 @@ aside {
   border-radius: 0.5rem;
   font-size: 0.875rem;
 }
+.capture-quality {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.5rem 1rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #3f5672;
+  border-radius: 0.5rem;
+  background: #101a2c;
+  font-size: 0.875rem;
+}
+.capture-quality[hidden] {
+  display: none;
+}
+.capture-quality.incomplete {
+  border-color: #9a7950;
+}
+.capture-quality > span {
+  color: #b9c8db;
+  font-variant-numeric: tabular-nums;
+}
+.capture-quality p {
+  margin: 0;
+  max-width: 90ch;
+  color: #efbd7b;
+}
+.capture-quality-bar {
+  display: flex;
+  height: 0.55rem;
+  border-radius: 0.2rem;
+  overflow: hidden;
+  background: #293243;
+}
+.capture-quality-bar i {
+  display: block;
+  width: 0;
+}
+.quality-ink {
+  background: #72d9ed;
+}
+.quality-repaired {
+  background: #efbd7b;
+}
+.quality-missing {
+  background: repeating-linear-gradient(135deg, #293243, #293243 4px, #536071 4px, #536071 6px);
+}
+.trace-scale {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin: 0.7rem 0;
+}
+.trace-scale span {
+  color: #b9c8db;
+}
 .capture-coverage summary {
   cursor: pointer;
   font-weight: 650;

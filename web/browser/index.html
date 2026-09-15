@@ -137,6 +137,30 @@
         </div>
       </header>
       <p data-id="capture-sound" class="capture-sound" role="status" hidden></p>
+      <section
+        data-id="capture-quality"
+        class="capture-quality"
+        aria-label="Screen capture quality"
+        hidden
+      >
+        <b data-id="capture-quality-title">Waiting for capture</b>
+        <span data-id="capture-quality-values"></span>
+        <div
+          data-id="capture-quality-bar"
+          class="capture-quality-bar"
+          role="img"
+          aria-label="Waiting for capture"
+        >
+          <i data-id="quality-ink" class="quality-ink"></i
+          ><i data-id="quality-repaired" class="quality-repaired"></i
+          ><i data-id="quality-missing" class="quality-missing"></i>
+        </div>
+        <p data-id="capture-quality-advice" hidden>
+          Increase vertical spacing or display fewer channels in the EEG window. Reconfirm timebase
+          and sensitivity after changing its display. Visible ink alone does not verify the
+          waveform’s identity.
+        </p>
+      </section>
       <details class="capture-coverage">
         <summary data-id="coverage-summary">Channel coverage · waiting for measurements</summary>
         <p data-id="coverage-period"></p>
@@ -148,6 +172,8 @@
                 <th>Channel</th>
                 <th>Latest</th>
                 <th>Trace ink</th>
+                <th>Repaired</th>
+                <th>Missing</th>
                 <th>Analysis</th>
                 <th>Usable</th>
                 <th>Analysis gap max</th>
@@ -163,9 +189,22 @@
             Capture diagnostic, not a verified EEG archive. Cyan = recovered ink; amber = short
             repaired raster breaks; hatching = missing samples. Gaps are never joined. These
             fragments do not bypass analysis or sound quality checks. Overlapping same-color traces
-            can still have uncertain identity. The ruler follows the dome scale; larger deflections
-            extend outside their row. This view remains live during history review.
+            can still have uncertain identity. Auto-fit uses one shared scale that includes the
+            largest recovered deflection. This view remains live during history review.
           </p>
+          <label class="trace-scale"
+            >Trace scale
+            <select data-id="trace-scale">
+              <option value="0">Auto-fit all traces</option>
+              <option value="40">±40 µV</option>
+              <option value="80">±80 µV</option>
+              <option value="160">±160 µV</option>
+              <option value="320">±320 µV</option>
+              <option value="640">±640 µV</option>
+              <option value="1280">±1280 µV</option>
+            </select>
+            <span>Inspector only; source calibration stays unchanged.</span>
+          </label>
           <div class="trace-scroll">
             <canvas
               data-id="trace-canvas"

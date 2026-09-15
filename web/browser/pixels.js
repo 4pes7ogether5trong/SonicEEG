@@ -182,21 +182,46 @@ export function extractTraces(
       for (let k = 1; k < rh; k++) if (prev[k] > prev[y]) y = k;
       const samples = new Float32Array(w),
         pixelY = new Float32Array(w),
+        sampleY = new Float32Array(w),
         observed = new Uint8Array(w),
         clippedPixels = new Uint8Array(w);
       for (let x = w - 1; x >= 0; x--) {
-        pixelY[x] = top + y;
         // Matching trace chroma is independent evidence. Browser video color
         // conversion can leave a clearly colored antialiased pixel below the
         // monochrome contrast threshold (for example RGB 255,227,231). Do not
         // label that observed ink as an interpolated gap. Neutral/other-hue
         // pixels still have zero score in the color-conditioned path.
-        observed[x] = score[x * rh + y] > (color ? 16 : 32) ? 1 : 0;
+        const threshold = color ? 16 : 32;
+        observed[x] = score[x * rh + y] > threshold ? 1 : 0;
+        // The path selects a connected stroke, not a voltage at its darkest
+        // edge. On steep antialiased lines several vertical pixels represent
+        // one time column. Use their contrast-weighted center without joining
+        // separate strokes or adding samples where no ink was observed.
+        let from = y,
+          to = y,
+          center = y;
+        if (observed[x]) {
+          while (from > 0 && score[x * rh + from - 1] > threshold) from--;
+          while (to + 1 < rh && score[x * rh + to + 1] > threshold) to++;
+          let weight = 0,
+            sum = 0;
+          for (let k = from; k <= to; k++) {
+            const ink = score[x * rh + k];
+            weight += ink;
+            sum += ink * k;
+          }
+          center = sum / weight;
+        }
+        // Preserve the path's original geometry for seeds, crossing rejection
+        // and sweep retention. Better voltage precision must not loosen those
+        // independent decisions about which samples are accepted.
+        pixelY[x] = top + y;
+        sampleY[x] = top + center;
         if ((y < 2 || y >= rh - 2) && !occluded[x]) {
           clippedPixels[x] = 1;
           observed[x] = 0;
         }
-        samples[x] = (top + y - row.y) * (negativeUp ? 1 : -1) * uvPerPixel;
+        samples[x] = (sampleY[x] - row.y) * (negativeUp ? 1 : -1) * uvPerPixel;
         y = back[x * rh + y];
       }
       const trace = {
@@ -204,6 +229,7 @@ export function extractTraces(
         labelInferred: row.labelInferred === true,
         samples,
         pixelY,
+        sampleY,
         observed,
         clippedPixels,
       };
@@ -216,7 +242,10 @@ export function extractTraces(
     for (const trace of traces) {
       const row = rows.find((r) => r.name === trace.name);
       for (let x = 0; x < w; x++)
-        trace.samples[x] = (trace.pixelY[x] - row.y) * (negativeUp ? 1 : -1) * uvPerPixel;
+        trace.samples[x] =
+          ((trace.observed[x] === 1 ? trace.sampleY[x] : trace.pixelY[x]) - row.y) *
+          (negativeUp ? 1 : -1) *
+          uvPerPixel;
       // Re-evaluate a thin grid interruption against the newly visible path's
       // endpoints, retaining the same short-gap and reconstruction budgets.
       for (let x = 0; x < w; x++) if (trace.observed[x] === 2) trace.observed[x] = 0;
@@ -310,6 +339,7 @@ export function traceSection(channel, from, to) {
   const section = {
     ...channel,
     samples: channel.samples.slice(from, to),
+    sampleY: channel.sampleY?.slice(from, to),
     observed: channel.observed?.slice(from, to),
     identityBlocked: channel.identityBlocked?.slice(from, to),
   };

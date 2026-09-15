@@ -4,6 +4,24 @@ export function traceVerticalOffset(voltage, scale, negativeUp = true) {
   return ((negativeUp ? 1 : -1) * voltage) / scale;
 }
 
+// One shared scale across leads. Auto-fit includes every finite visible sample,
+// not a percentile that would conceal large deflections or select a quiet lead.
+export function traceDisplayScale(rows, requested = 0) {
+  if (Number.isFinite(requested) && requested > 0) return requested;
+  let peak = 0;
+  for (const row of rows) {
+    const from = Math.max(0, row.end - 4);
+    for (const fragment of row.fragments || [])
+      for (let i = 0; i < fragment.samples.length; i++) {
+        const time = fragment.start + i / fragment.rate;
+        const value = fragment.samples[i];
+        if (time >= from && time < row.end && fragment.observed[i] && Number.isFinite(value))
+          peak = Math.max(peak, Math.abs(value));
+      }
+  }
+  return 40 * 2 ** Math.max(0, Math.ceil(Math.log2(Math.max(40, peak) / 40)));
+}
+
 export function drawTraceMonitor(canvas, rows, { scale = 80 } = {}) {
   const width = 840,
     rowHeight = 54,

@@ -185,8 +185,9 @@ export function extendTracePaths(
         const x = node.x;
         reject(node, ri);
         if (node.from <= top + 1 || node.to >= bottom - 2) continue;
-        // A neighboring seed owning the same stroke was rejected above. Do not
-        // replace already measured ink on this path or its integer position.
+        // A neighboring seed owning the same stroke was rejected above. The
+        // whole visible stroke supplies its center even when the narrow lane
+        // found only one edge. Branches and conflicting labels remain absent.
         trace.identity[x] = 1;
         trace.identityBlocked[x] = 0;
         if (
@@ -195,11 +196,13 @@ export function extendTracePaths(
           trace.pixelY[x] >= node.from &&
           trace.pixelY[x] <= node.to
         ) {
+          trace.sampleY[x] = node.center;
           trace.observed[x] = 1;
           trace.clippedPixels[x] = 0;
           continue;
         }
         trace.pixelY[x] = node.center;
+        trace.sampleY[x] = node.center;
         trace.observed[x] = 1;
         trace.clippedPixels[x] = 0;
         trace.trackedPixels = (trace.trackedPixels || 0) + 1;
