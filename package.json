@@ -1,0 +1,22 @@
+{
+  "name": "soniceeg-browser",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "node browser/build-assets.mjs && vite build",
+    "test": "node --test browser/tests/*.test.mjs",
+    "check": "node browser/check.mjs",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "three": "0.183.0",
+    "tesseract.js": "6.0.1",
+    "@tesseract.js-data/eng": "1.0.0"
+  },
+  "devDependencies": {
+    "vite": "6.4.1",
+    "fake-indexeddb": "6.0.0"
+  }
+}

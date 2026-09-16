@@ -2,7 +2,10 @@ from typing import Dict
 
 import numpy as np
 
-from utils.config import AppConfig
+try:
+    from sonic_eeg_prototype.utils.config import AppConfig
+except ModuleNotFoundError:
+    from utils.config import AppConfig
 
 
 def compute_band_powers(signal: np.ndarray, config: AppConfig) -> Dict[str, float]:

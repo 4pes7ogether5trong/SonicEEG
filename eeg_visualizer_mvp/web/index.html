@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>SonicEEG · Signal Constellation</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="masthead">
+    <div>
+      <p class="eyebrow">SONICEEG / RESEARCH VISUALIZATION MVP</p>
+      <h1>Signal Constellation</h1>
+    </div>
+    <div class="status-cluster" aria-live="polite">
+      <span id="connectionDot" class="status-dot waiting"></span>
+      <span id="connectionText">Connecting to local pipeline…</span>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="control-rail">
+      <section class="panel source-panel">
+        <p class="panel-kicker">Input contract</p>
+        <h2 id="sourceLabel">Awaiting source</h2>
+        <dl class="metrics">
+          <div><dt>Channels</dt><dd id="channelCount">—</dd></div>
+          <div><dt>Sample rate</dt><dd id="sampleRate">—</dd></div>
+          <div><dt>Window</dt><dd id="windowLength">—</dd></div>
+          <div><dt>Voltage</dt><dd id="voltageStatus">—</dd></div>
+        </dl>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Reference only</p>
+            <h2>Age equilibrium</h2>
+          </div>
+          <output id="ageOutput" for="ageControl">30 y</output>
+        </div>
+        <input id="ageControl" class="age-slider" type="range" min="1" max="100" value="30" step="1">
+        <p class="fine-print">Age changes the dashed comparison contour—not the signal ruler or measured coordinates.</p>
+      </section>
+
+      <section class="panel">
+        <p class="panel-kicker">Temporal memory</p>
+        <label class="switch-row"><input id="liveLayer" type="checkbox" checked><span>Live glyphs</span></label>
+        <label class="switch-row"><input id="recentLayer" type="checkbox" checked><span>Recent trails</span></label>
+        <label class="switch-row"><input id="densityLayer" type="checkbox" checked><span>Accumulated density</span></label>
+        <label class="switch-row"><input id="referenceLayer" type="checkbox" checked><span>Age reference</span></label>
+        <div class="button-row">
+          <button id="pauseButton" type="button">Pause</button>
+          <button id="resetButton" class="quiet" type="button">Reset memory</button>
+        </div>
+      </section>
+
+      <section class="panel caution-panel">
+        <p class="panel-kicker">Interpretation boundary</p>
+        <p id="warningText">No clinical classifications are emitted in v1. Candidate flags describe signal integrity only.</p>
+      </section>
+    </aside>
+
+    <section class="visual-column">
+      <div class="visual-card">
+        <div class="visual-heading">
+          <div>
+            <p class="panel-kicker">Deterministic signal grammar</p>
+            <h2>Frequency × localization × voltage</h2>
+          </div>
+          <div id="frameClock" class="frame-clock">Frame —</div>
+        </div>
+        <canvas id="constellation" aria-label="Abstract radial EEG feature visualization"></canvas>
+        <div class="band-legend" aria-label="Frequency band colors">
+          <span><i class="delta"></i>δ 0.5–4</span>
+          <span><i class="theta"></i>θ 4–8</span>
+          <span><i class="alpha"></i>α 8–13</span>
+          <span><i class="beta"></i>β 13–30</span>
+          <span><i class="gamma"></i>γ 30–45 Hz</span>
+        </div>
+      </div>
+
+      <div class="trace-card">
+        <div class="visual-heading trace-heading">
+          <div>
+            <p class="panel-kicker">Synchronized source window</p>
+            <h2>Raw trace preview</h2>
+          </div>
+          <p class="trace-note">Per-channel robust scaling · morphology preserved</p>
+        </div>
+        <div id="traceScroller" class="trace-scroller">
+          <canvas id="traces" aria-label="Synchronized EEG traces"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <aside class="legend-rail">
+      <section class="panel grammar-panel">
+        <p class="panel-kicker">Read the field</p>
+        <h2>Visual grammar</h2>
+        <ol>
+          <li><b>Radius</b><span>dominant frequency, logarithmic</span></li>
+          <li><b>Sector</b><span>fixed channel identity</span></li>
+          <li><b>Side-slip</b><span>signed instantaneous voltage</span></li>
+          <li><b>Color</b><span>dominant frequency band</span></li>
+          <li><b>Mass</b><span>spectral concentration</span></li>
+          <li><b>Satellite</b><span>dominant-rhythm phase</span></li>
+          <li><b>Texture</b><span>rhythmicity</span></li>
+          <li><b>Opacity</b><span>signal confidence</span></li>
+        </ol>
+      </section>
+
+      <section class="panel focus-panel">
+        <p class="panel-kicker">Focused channel</p>
+        <h2 id="focusName">Hover a glyph</h2>
+        <dl class="focus-metrics">
+          <div><dt>Dominant</dt><dd id="focusFrequency">—</dd></div>
+          <div><dt>RMS</dt><dd id="focusRms">—</dd></div>
+          <div><dt>Rhythmicity</dt><dd id="focusRhythm">—</dd></div>
+          <div><dt>Quality</dt><dd id="focusQuality">—</dd></div>
+        </dl>
+        <div id="bandBars" class="band-bars"></div>
+      </section>
+
+      <section class="panel provenance-panel">
+        <p class="panel-kicker">Frame provenance</p>
+        <p><span id="schemaLabel">schema —</span></p>
+        <p id="privacyLabel">Memory-only by default. No raw samples or screenshots are written.</p>
+      </section>
+    </aside>
+  </main>
+
+  <footer>
+    <span>RESEARCH PROTOTYPE · NOT FOR DIAGNOSIS OR PATIENT MONITORING</span>
+    <span>SonicEEG modular visualizer v0.1</span>
+  </footer>
+  <script src="app.js"></script>
+</body>
+</html>

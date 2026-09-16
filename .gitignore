@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+output/
+sonic_eeg_prototype/output/
+eeg_visualizer_mvp/output/
+node_modules/
+dist/
+browser/public/ocr/
+browser/public/licenses/
+.openai/
+*.log

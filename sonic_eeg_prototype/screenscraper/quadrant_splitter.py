@@ -1,7 +1,10 @@
 from typing import Dict
 from PIL import Image
 
-from utils.config import AppConfig
+try:
+    from sonic_eeg_prototype.utils.config import AppConfig
+except ModuleNotFoundError:
+    from utils.config import AppConfig
 
 
 def split_quadrants(image: Image.Image, config: AppConfig) -> Dict[str, Image.Image]:
