@@ -23,7 +23,7 @@ self.onmessage = ({ data: m }) => {
       usableChannels = null;
       pipeline = new FeaturePipeline((frame) => {
         publishedEnd = frame.end;
-        usableChannels = frame.channels.filter((c) => c.valid).length;
+        usableChannels = frame.channels.filter((c) => c.valid && c.status === 'observed').length;
         postMessage({ type: 'frame', frame });
       });
       postMessage({ type: 'ready' });
@@ -84,6 +84,7 @@ self.onmessage = ({ data: m }) => {
     const newChannels = block.channels || block.segments?.findLast((p) => p.channels)?.channels;
     postMessage({
       type: 'status',
+      mode: stitcher.mode,
       reason: block.reason || 'New EEG columns reconstructed',
       accepted: !!newChannels,
       gap: !!block.gap,

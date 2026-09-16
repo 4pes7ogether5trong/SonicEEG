@@ -2,6 +2,7 @@ import { ChannelCoverage } from './channel-coverage.js';
 import { TraceMonitor } from './trace-monitor.js';
 import { drawTraceMonitor, traceDisplayScale } from './trace-view.js';
 import { recentTraceQuality } from './capture-quality.js';
+import { captureStatusMessage } from './capture-status.js';
 import { BANDS, AMPLITUDE_THRESHOLDS, prevalence } from './signal.js';
 import { parseDerivation, recognizeMontage } from './montage.js';
 import { suggestMontageLabels } from './montage-inference.js';
@@ -76,7 +77,7 @@ export function mountPatient(
     lastFrame = null,
     timer = null,
     worker = null,
-    workerReadyTimer = null,
+    workerResponseTimer = null,
     busy = false,
     segment = 0,
     localId = null,
@@ -578,7 +579,7 @@ export function mountPatient(
     timer = null;
     worker?.terminate();
     worker = null;
-    clearTimeout(workerReadyTimer);
+    clearTimeout(workerResponseTimer);
     busy = false;
     reading = false;
     starting = false;
@@ -1144,16 +1145,14 @@ export function mountPatient(
         if (m.type === 'frame') receive(m.frame);
         if (m.type === 'status') {
           busy = false;
+          clearTimeout(workerResponseTimer);
           renderCoverage();
-          status(
-            `${m.usableChannels == null ? 'Building the first EEG window' : `${m.usableChannels}/${m.channels.length} EEG channels analyzed`} · ${m.reason}`,
-            m.usableChannels === 0,
-          );
+          status(captureStatusMessage(m), (m.gap && !m.expectedRedraw) || m.usableChannels === 0);
           if (m.gap && !m.expectedRedraw) audio.unavailable(slot);
           else if (m.expectedRedraw && m.usableChannels === 0) audio.redraw?.(slot);
         }
         if (m.type === 'ready') {
-          clearTimeout(workerReadyTimer);
+          clearTimeout(workerResponseTimer);
           busy = false;
         }
         if (m.type === 'error') {
@@ -1163,10 +1162,11 @@ export function mountPatient(
       };
       worker.onerror = () =>
         suspend('The local processing worker stopped. Review capture setup to restart.');
-      workerReadyTimer = setTimeout(() => {
-        if (token === operation && active && busy)
-          suspend('Signal analysis did not start. Review capture setup and retry.');
-      }, 5000);
+      worker.onmessageerror = () =>
+        suspend(
+          'Signal processing returned an unreadable result. Review capture setup to restart.',
+        );
+      expectWorkerResponse('Signal analysis did not start. Review capture setup and retry.', 5000);
       worker.postMessage({
         type: 'configure',
         offset: Math.max(history.end, traceMonitor.end),
@@ -1196,6 +1196,13 @@ export function mountPatient(
       return false;
     }
   }
+  function expectWorkerResponse(message, timeout = 15000) {
+    clearTimeout(workerResponseTimer);
+    const token = operation;
+    workerResponseTimer = setTimeout(() => {
+      if (token === operation && active && busy) suspend(message);
+    }, timeout);
+  }
   function suspend(reason, filtersOnly = false) {
     operation++;
     reading = false;
@@ -1205,7 +1212,7 @@ export function mountPatient(
     clearInterval(timer);
     worker?.terminate();
     worker = null;
-    clearTimeout(workerReadyTimer);
+    clearTimeout(workerResponseTimer);
     busy = false;
     audio.stop(slot, 'review');
     renderCoverage();
@@ -1238,28 +1245,29 @@ export function mountPatient(
       suspend('The captured window changed size. Confirm the regions and calibration again.');
       return;
     }
-    if (!reading && performance.now() - watchAt > 5000 && (regions.settings || regions.labels)) {
+    const labelRegion = watchedLabels ? regions.labels : null,
+      settingsRegion = Object.keys(watchedDisplay).length ? regions.settings : null;
+    if (!reading && performance.now() - watchAt > 5000 && (settingsRegion || labelRegion)) {
       reading = true;
       watchAt = performance.now();
       void (async () => {
         try {
-          const checked =
-              watchedLabels && regions.labels
-                ? await capture.recognize(regions.labels, regions.settings)
-                : {
-                    rows: null,
-                    settings: await capture.settings(regions.settings),
-                  },
+          const checked = labelRegion
+              ? await capture.recognize(labelRegion, settingsRegion)
+              : {
+                  rows: null,
+                  settings: await capture.settings(settingsRegion),
+                },
             next = checked.settings;
           if (token !== operation || version !== capture.version || !active) return;
-          const difference = regions.settings
+          const difference = settingsRegion
             ? settingsDifference(watchedDisplay, next)
             : { needsReview: false, changed: [], unreadable: [] };
           const layoutChanged = labelsChanged(watchedLabels, checked.rows);
           if (difference.needsReview || layoutChanged) {
             markUncertain();
             suspend(
-              'Display settings changed or became unreadable. Recent frames are uncertain; confirm the display before resuming.',
+              `${layoutChanged ? 'Channel labels or row positions changed or became unreadable.' : `Automatic check: ${difference.changed.length ? `${difference.changed.join(', ')} changed. ` : ''}${difference.unreadable.length ? `${difference.unreadable.join(', ')} could not be read.` : ''}`} Review capture setup to confirm the display; recent frames are marked uncertain.`,
               !layoutChanged &&
                 difference.unreadable.length === 0 &&
                 difference.changed.every((k) => ['hp', 'lp', 'notch'].includes(k)),
@@ -1289,6 +1297,9 @@ export function mountPatient(
           .getContext('2d', { willReadFrequently: true })
           .getImageData(0, 0, c.width, c.height);
       busy = true;
+      expectWorkerResponse(
+        'Signal processing stopped responding. Use a smaller waveform region or fewer channels, then review capture setup to restart.',
+      );
       worker.postMessage(
         {
           type: 'pixels',

@@ -1,9 +1,7 @@
 const keys = ['hp', 'lp', 'notch', 'seconds', 'sensitivity'];
 export function settingsWatchReference(confirmed, recognized) {
   return Object.fromEntries(
-    keys
-      .filter((k) => recognized?.[k] != null)
-      .map((k) => [k, confirmed?.[k] ?? recognized[k]]),
+    keys.filter((k) => recognized?.[k] != null).map((k) => [k, confirmed?.[k] ?? recognized[k]]),
   );
 }
 // Never advance a confirmed reference merely because OCR produced new text.
@@ -11,6 +9,9 @@ export function settingsDifference(confirmed, observed) {
   const changed = [],
     unreadable = [];
   for (const key of keys) {
+    // Only established automatic checks can detect a change. A value that OCR
+    // reads for the first time is not evidence that a manual setting changed.
+    if (!Object.hasOwn(confirmed || {}, key)) continue;
     const a = confirmed?.[key],
       b = observed?.[key];
     if (a != null && b == null) unreadable.push(key);

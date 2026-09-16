@@ -38,14 +38,6 @@ export class ScreenStitcher {
         duration: dt,
       };
     }
-    const good = channels
-      .map((c, i) => (c.valid && prev.channels[i].valid ? i : -1))
-      .filter((i) => i >= 0);
-    if (this.mode !== 'sweep' && good.length < Math.min(2, channels.length)) {
-      this.previous = current;
-      this.time += dt;
-      return { reason: 'Too few reliable traces', gap: true, duration: dt };
-    }
     // Select sweep only after its cursor actually advances at the confirmed
     // timebase. A stationary colored grid line is not evidence of a sweep.
     if (this.mode === 'auto' && cursor != null && prev.cursor != null) {
@@ -53,6 +45,16 @@ export class ScreenStitcher {
         expected = rate * dt;
       if (advance > 0 && Math.abs(advance - expected) <= Math.max(8, expected * 0.6))
         this.mode = 'sweep';
+    }
+    // Cursor timing does not depend on the unreadable, older part of a swept
+    // page. New sections still receive their own extraction and analysis checks.
+    const good = channels
+      .map((c, i) => (c.valid && prev.channels[i].valid ? i : -1))
+      .filter((i) => i >= 0);
+    if (this.mode !== 'sweep' && good.length < Math.min(2, channels.length)) {
+      this.previous = current;
+      this.time += dt;
+      return { reason: 'Too few reliable traces', gap: true, duration: dt };
     }
     let from, to;
     if (this.mode === 'sweep') {
@@ -154,15 +156,39 @@ export class ScreenStitcher {
       const cost = (shift) => {
         let err = 0,
           energy = 0,
-          count = 0;
-        for (const c of good.slice(0, 6))
+          count = 0,
+          matchedRows = 0;
+        for (const c of good.slice(0, 6)) {
+          const previous = prev.channels[c],
+            next = channels[c];
+          let rowError = 0,
+            rowEnergy = 0,
+            rowCount = 0;
           for (let x = 0; x < n - shift; x += 2) {
-            const a = prev.channels[c].samples[x + shift],
-              b = channels[c].samples[x];
-            err += (a - b) ** 2;
-            energy += a * a + b * b;
-            count++;
+            const a = previous.samples[x + shift],
+              b = next.samples[x];
+            if (
+              !Number.isFinite(a) ||
+              !Number.isFinite(b) ||
+              (previous.observed && previous.observed[x + shift] !== 1) ||
+              (next.observed && next.observed[x] !== 1) ||
+              previous.clippedPixels?.[x + shift] ||
+              next.clippedPixels?.[x]
+            )
+              continue;
+            rowError += (a - b) ** 2;
+            rowEnergy += a * a + b * b;
+            rowCount++;
           }
+          // A few coincident pixels must not establish a screen clock. Missing
+          // and repaired pixels are excluded from alignment, never filled in.
+          if (rowCount < Math.max(16, Math.ceil((n - shift) / 2) * 0.7)) continue;
+          matchedRows++;
+          err += rowError;
+          energy += rowEnergy;
+          count += rowCount;
+        }
+        if (matchedRows < Math.min(2, channels.length)) return Infinity;
         return err / Math.max(energy, count * 0.5);
       };
       if (cost(0) < 0.001) return { reason: 'Screen has not advanced' };
@@ -176,9 +202,9 @@ export class ScreenStitcher {
         costs.push({ shift, cost: e });
         if (e < best.cost) best = { shift, cost: e };
       }
-      const competing = costs.some(
-        (c) => Math.abs(c.shift - best.shift) > 3 && c.cost < best.cost * 1.3 + 0.002,
-      );
+      const competing =
+        Number.isFinite(best.cost) &&
+        costs.some((c) => Math.abs(c.shift - best.shift) > 3 && c.cost < best.cost * 1.3 + 0.002);
       if (best.cost > 0.025 || competing) {
         this.previous = current;
         this.time += dt;
