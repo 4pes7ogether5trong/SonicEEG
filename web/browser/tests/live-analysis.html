@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SonicEEG capture and cloud regression</title>
+  <style>
+    body {
+      font: 15px system-ui;
+      background: #09121e;
+      color: #d7e7f4;
+      margin: 20px;
+    }
+    button {
+      padding: 12px;
+      font: inherit;
+    }
+    canvas {
+      max-width: 100%;
+    }
+    .stage {
+      height: 430px;
+      position: relative;
+    }
+    .stage canvas {
+      width: 100%;
+      height: 100%;
+    }
+    pre {
+      white-space: pre-wrap;
+    }
+  </style>
+  <h1>Live capture and cloud regression</h1>
+  <p>
+    Known synthetic traces → canvas video stream → BrowserCapture → production worker → history
+    cloud. This does not use the OS sharing picker. A deliberate missing interval tests recovery. No
+    patient data.
+  </p>
+  <button id="run">Run 28-second check</button>
+  <button id="stop">Stop</button>
+  <p id="status" role="status">Ready</p>
+  <canvas id="source" width="1024" height="240" aria-label="Known sweeping test traces"></canvas>
+  <div class="stage" id="stage"></div>
+  <pre id="results">No measurements</pre>
+  <script type="module" src="./live-analysis.mjs"></script>
+</html>

@@ -17,6 +17,7 @@ import { reliefGeometry } from './waveform.js';
 import { WaterRenderer } from './water-renderer.js';
 import { missingWaterSources, missingWaterAt, waterChannels, waterAt } from './water-math.js';
 import { regionalArchitectures } from './fluid-episodes.js';
+import { canBlendCloud, cloudContext, cloudEase, CLOUD_TRANSITION_MS } from './cloud-motion.js';
 
 const vertex =
   'attribute float intensity; attribute float coverage; attribute float affected; varying float vI; varying float vC; varying float vA; varying vec3 vColor; varying vec3 vLocal; void main(){vI=intensity;vC=coverage;vA=affected;vColor=color;vLocal=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
@@ -41,6 +42,9 @@ export class FluidField {
     this.glyphs = [];
     this.reliefs = [];
     this.weights = new Map();
+    this.waterSamples = new WeakMap();
+    this.softwareGrids = new Map();
+    this.reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.options = {
       mode: 'live',
       band: -1,
@@ -130,7 +134,6 @@ export class FluidField {
         )[0];
         if (hit) this.onSelect(hit.object.userData.names[hit.index]);
       });
-      this.reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
       let last = performance.now();
       this.renderer.setAnimationLoop((now) => {
         const dt = Math.min(0.05, (now - last) / 1000);
@@ -434,7 +437,7 @@ export class FluidField {
     this.options = { ...this.options, ...options };
     this.frames = frames || [];
     if (this.software) {
-      this.drawSoftware();
+      this.updateSoftware();
       return;
     }
     const o = this.options,
@@ -629,7 +632,57 @@ export class FluidField {
       { passive: false },
     );
   }
+  updateSoftware() {
+    const o = this.options;
+    const blend = canBlendCloud(this.softwareCloud, this.frames, o, this.reduceMotion);
+    // Only two bounded canvases. Intermediate frames composite cached pixels;
+    // they do not rerun the expensive geometry or signal calculations.
+    if (blend) {
+      this.cloudFrom ??= document.createElement('canvas');
+      this.cloudTo ??= document.createElement('canvas');
+      for (const c of [this.cloudFrom, this.cloudTo]) {
+        if (c.width !== this.canvas.width) c.width = this.canvas.width;
+        if (c.height !== this.canvas.height) c.height = this.canvas.height;
+      }
+      this.cloudFrom.getContext('2d').drawImage(this.canvas, 0, 0);
+    }
+    this.drawSoftware();
+    this.softwareCloud = { end: o.total, context: cloudContext(this.frames, o) };
+    if (!blend) return;
+    this.cloudTo.getContext('2d').drawImage(this.canvas, 0, 0);
+    const started = performance.now();
+    const token = this.softwareMotion;
+    const paint = (time) => {
+      if (token !== this.softwareMotion) return;
+      const mix = cloudEase(time - started);
+      const ctx = this.software;
+      ctx.globalAlpha = 1;
+      ctx.drawImage(this.cloudFrom, 0, 0);
+      ctx.globalAlpha = mix;
+      ctx.drawImage(this.cloudTo, 0, 0);
+      ctx.globalAlpha = 1;
+      if (time - started < CLOUD_TRANSITION_MS && this.visible !== false && !document.hidden) {
+        // Some software/remote compositors deliver animation callbacks only
+        // when their surface is requested. Keep a visible cloud moving with a
+        // bounded timer fallback; fast display callbacks cancel it immediately.
+        let painted = false;
+        const next = (at) => {
+          if (painted) return;
+          painted = true;
+          cancelAnimationFrame(this.softwareAnimation);
+          clearTimeout(this.softwareAnimationTimer);
+          paint(at);
+        };
+        this.softwareAnimation = requestAnimationFrame(next);
+        this.softwareAnimationTimer = setTimeout(() => next(performance.now()), 40);
+      } else ctx.drawImage(this.cloudTo, 0, 0);
+    };
+    paint(started);
+  }
   drawSoftware() {
+    this.softwareMotion = (this.softwareMotion || 0) + 1;
+    if (this.softwareAnimation) cancelAnimationFrame(this.softwareAnimation);
+    clearTimeout(this.softwareAnimationTimer);
     if (!this.software || !this.frames) return;
     const ctx = this.software,
       w = this.canvas.width,
@@ -638,21 +691,28 @@ export class FluidField {
     ctx.fillStyle = '#060c14';
     ctx.fillRect(0, 0, w, h);
     this.softwareDrops = [];
-    const grid = o.fluid
+    const gridKey = o.fluid ? (o.mode === 'live' ? 'fluid-live' : 'fluid-history') : 'spectrum';
+    if (!this.softwareGrids.has(gridKey)) {
+      const g = o.fluid
         ? scalpGrid(o.mode === 'live' ? 48 : 28, o.mode === 'live' ? 96 : 48)
-        : scalpGrid(16, 28),
+        : scalpGrid(16, 28);
+      if (o.fluid) {
+        const top = g.vertices[0][1];
+        for (const v of g.vertices)
+          if (v[1] === top) {
+            v[0] = 0;
+            v[1] = 0.88;
+            v[2] = 0;
+          }
+      }
+      g.directions = g.vertices.map((v) => normalize([v[0], v[1] / 0.88, v[2] / 1.12]));
+      g.normals = g.directions.map((p) => normalize([p[0], p[1] / 0.88, p[2] / 1.12]));
+      this.softwareGrids.set(gridKey, g);
+    }
+    const grid = this.softwareGrids.get(gridKey),
       shown = o.mode === 'live' ? this.frames.slice(-1) : this.frames,
       tris = [],
       glyphs = [];
-    if (o.fluid) {
-      const top = grid.vertices[0][1];
-      for (const v of grid.vertices)
-        if (v[1] === top) {
-          v[0] = 0;
-          v[1] = 0.88;
-          v[2] = 0;
-        }
-    }
     const project = (v) => {
       const [x, y, z] = v,
         xx = x * Math.cos(this.yaw) + z * Math.sin(this.yaw),
@@ -669,14 +729,18 @@ export class FluidField {
         const cs = waterChannels(f, o.selected),
           ds = regionalArchitectures(o.dropletsFor(f), o.scale);
         const missing = missingWaterSources(f, o.selected);
-        const values = grid.vertices.map((v) =>
-          waterAt(normalize([v[0], v[1] / 0.88, v[2] / 1.12]), cs, o),
-        );
+        const sampleKey = JSON.stringify([gridKey, o.selected, o.scale, o.lag || 0]);
+        const cached = f.waveform && this.waterSamples.get(f.waveform);
+        const values =
+          cached?.key === sampleKey ? cached.values : grid.directions.map((p) => waterAt(p, cs, o));
+        if (f.waveform && cached?.key !== sampleKey)
+          this.waterSamples.set(f.waveform, { key: sampleKey, values });
+        const activeDrops = ds.filter((d) => d.active).slice(0, 24);
         const positions = grid.vertices.map((v, i) => {
-          const p = normalize([v[0], v[1] / 0.88, v[2] / 1.12]),
-            n = normalize([p[0], p[1] / 0.88, p[2] / 1.12]);
+          const p = grid.directions[i],
+            n = grid.normals[i];
           let bulge = 0;
-          for (const d of ds.filter((d) => d.active).slice(0, 24)) {
+          for (const d of activeDrops) {
             const angle = Math.acos(
               Math.max(
                 -1,
@@ -709,15 +773,7 @@ export class FluidField {
             p: ids.map((j) => pts[j]),
             z: ids.reduce((s, j) => s + pts[j][2], 0),
             relief: true,
-            missing: missingWaterAt(
-              normalize([
-                grid.vertices[ids[0]][0],
-                grid.vertices[ids[0]][1] / 0.88,
-                grid.vertices[ids[0]][2] / 1.12,
-              ]),
-              missing,
-              s.coverage,
-            ),
+            missing: missingWaterAt(grid.directions[ids[0]], missing, s.coverage),
             amp:
               (0.25 + 0.75 * Math.abs(-0.4 * n[0] + 0.7 * n[1] + 0.6 * n[2])) *
               (0.2 + 0.8 * Math.min(1, s.coverage * 5)),

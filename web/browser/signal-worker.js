@@ -8,6 +8,7 @@ let config,
   traceTracker,
   pipeline,
   usableChannels = null,
+  analysis = null,
   capturedEnd = 0,
   publishedEnd = 0;
 self.onmessage = ({ data: m }) => {
@@ -21,9 +22,13 @@ self.onmessage = ({ data: m }) => {
       publishedEnd = stitcher.time;
       capturedEnd = stitcher.time;
       usableChannels = null;
+      analysis = null;
       pipeline = new FeaturePipeline((frame) => {
         publishedEnd = frame.end;
         usableChannels = frame.channels.filter((c) => c.valid && c.status === 'observed').length;
+        analysis = frame.channels
+          .filter((c) => c.status === 'observed')
+          .map((c) => ({ name: c.name, ...c.analysis }));
         postMessage({ type: 'frame', frame });
       });
       postMessage({ type: 'ready' });
@@ -90,6 +95,7 @@ self.onmessage = ({ data: m }) => {
       gap: !!block.gap,
       expectedRedraw: block.expectedRedraw === true,
       usableChannels,
+      analysis,
       channels: (newChannels || channels).map((c) => ({
         name: c.name,
         quality: c.quality,

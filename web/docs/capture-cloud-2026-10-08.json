@@ -1,0 +1,905 @@
+{
+  "reference_revision": "bd609be8e839441eaa3777c5b739092480d2f7e9",
+  "date": "2026-10-08",
+  "excerpt_sha256": "e16fc04741adccc8b61a0140ce8063b944ed05a1ab057972850ba6d70060eb56",
+  "source_manifest_sha256": "25d21accd5700c8dacda12530475e87b99f27d957d6d3dcd34b2d4a17236377d",
+  "source": "Restored benchmark excerpt from previously verified CHB-MIT chb01_03.edf. The original EDF was not downloaded again.",
+  "results": [
+    {
+      "condition": "isolated_2uv",
+      "identical_recovered_samples_and_masks": true,
+      "before": {
+        "feature_frames": 187,
+        "maximum_analysis_arrival_gap_seconds": 2.0,
+        "timeline_audit": {
+          "duplicate_output_columns": 0,
+          "blocks_off_expected_sample_grid": 0,
+          "out_of_range_output_columns": 0,
+          "worker_errors": 0,
+          "max_trace_end_vs_input_clock_error_s": 0.0,
+          "last_trace_end_s": 3070,
+          "last_feature_end_s": 3070,
+          "trace_blocks": 220,
+          "feature_frames": 187,
+          "input_status_counts": {
+            "Anchoring capture; waiting for new screen data": 1,
+            "New EEG columns reconstructed": 209,
+            "Completed sweep retained; next page starting": 11
+          },
+          "saved_messages_verified": 629,
+          "input_status_frames_verified": 221
+        },
+        "epochs": {
+          "all": {
+            "expected_columns": 19800,
+            "observed_fraction": 1.0,
+            "repaired_fraction": 0.0,
+            "missing_fraction": 0.0,
+            "production_feature_valid_fraction": 1.0,
+            "observed_error": {
+              "n": 19800,
+              "rmse_uV": 5.004487697140764,
+              "mae_uV": 2.9634606542904876,
+              "p95_absolute_error_uV": 10.082031320741844,
+              "pearson_r": 0.9964250077142051
+            },
+            "repaired_error": {
+              "n": 0,
+              "rmse_uV": null,
+              "mae_uV": null,
+              "p95_absolute_error_uV": null,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 19800,
+              "rmse_uV": 5.004487697140764,
+              "mae_uV": 2.9634606542904876,
+              "p95_absolute_error_uV": 10.082031320741844,
+              "pearson_r": 0.9964250077142051
+            },
+            "longest_missing_run_s": 0.0,
+            "median_channel_pearson_r": 0.9964250077142051
+          },
+          "before_annotation": {
+            "expected_columns": 6480,
+            "observed_fraction": 1.0,
+            "repaired_fraction": 0.0,
+            "missing_fraction": 0.0,
+            "production_feature_valid_fraction": 1.0,
+            "observed_error": {
+              "n": 6480,
+              "rmse_uV": 2.024645444215694,
+              "mae_uV": 1.3934110770711767,
+              "p95_absolute_error_uV": 4.534938733004968,
+              "pearson_r": 0.9973871469619453
+            },
+            "repaired_error": {
+              "n": 0,
+              "rmse_uV": null,
+              "mae_uV": null,
+              "p95_absolute_error_uV": null,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 6480,
+              "rmse_uV": 2.024645444215694,
+              "mae_uV": 1.3934110770711767,
+              "p95_absolute_error_uV": 4.534938733004968,
+              "pearson_r": 0.9973871469619453
+            },
+            "longest_missing_run_s": 0.0,
+            "median_channel_pearson_r": 0.9973871469619453
+          },
+          "annotated_seizure": {
+            "expected_columns": 7200,
+            "observed_fraction": 1.0,
+            "repaired_fraction": 0.0,
+            "missing_fraction": 0.0,
+            "production_feature_valid_fraction": 1.0,
+            "observed_error": {
+              "n": 7200,
+              "rmse_uV": 7.0456891793863985,
+              "mae_uV": 4.452838483727392,
+              "p95_absolute_error_uV": 14.928969786070022,
+              "pearson_r": 0.9963742408487889
+            },
+            "repaired_error": {
+              "n": 0,
+              "rmse_uV": null,
+              "mae_uV": null,
+              "p95_absolute_error_uV": null,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 7200,
+              "rmse_uV": 7.0456891793863985,
+              "mae_uV": 4.452838483727392,
+              "p95_absolute_error_uV": 14.928969786070022,
+              "pearson_r": 0.9963742408487889
+            },
+            "longest_missing_run_s": 0.0,
+            "median_channel_pearson_r": 0.9963742408487889
+          },
+          "after_annotation": {
+            "expected_columns": 6120,
+            "observed_fraction": 1.0,
+            "repaired_fraction": 0.0,
+            "missing_fraction": 0.0,
+            "production_feature_valid_fraction": 1.0,
+            "observed_error": {
+              "n": 6120,
+              "rmse_uV": 4.276125346889453,
+              "mae_uV": 2.873656877891046,
+              "p95_absolute_error_uV": 8.232026210359512,
+              "pearson_r": 0.9966476446298925
+            },
+            "repaired_error": {
+              "n": 0,
+              "rmse_uV": null,
+              "mae_uV": null,
+              "p95_absolute_error_uV": null,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 6120,
+              "rmse_uV": 4.276125346889453,
+              "mae_uV": 2.873656877891046,
+              "p95_absolute_error_uV": 8.232026210359512,
+              "pearson_r": 0.9966476446298925
+            },
+            "longest_missing_run_s": 0.0,
+            "median_channel_pearson_r": 0.9966476446298925
+          }
+        }
+      },
+      "after": {
+        "feature_frames": 217,
+        "maximum_analysis_arrival_gap_seconds": 0.5,
+        "timeline_audit": {
+          "duplicate_output_columns": 0,
+          "blocks_off_expected_sample_grid": 0,
+          "out_of_range_output_columns": 0,
+          "worker_errors": 0,
+          "max_trace_end_vs_input_clock_error_s": 0.0,
+          "last_trace_end_s": 3070,
+          "last_feature_end_s": 3070,
+          "trace_blocks": 220,
+          "feature_frames": 217,
+          "input_status_counts": {
+            "Anchoring capture; waiting for new screen data": 1,
+            "New EEG columns reconstructed": 209,
+            "Completed sweep retained; next page starting": 11
+          },
+          "saved_messages_verified": 659,
+          "input_status_frames_verified": 221
+        },
+        "epochs": {
+          "all": {
+            "expected_columns": 19800,
+            "observed_fraction": 1.0,
+            "repaired_fraction": 0.0,
+            "missing_fraction": 0.0,
+            "production_feature_valid_fraction": 1.0,
+            "observed_error": {
+              "n": 19800,
+              "rmse_uV": 5.004487697140764,
+              "mae_uV": 2.9634606542904876,
+              "p95_absolute_error_uV": 10.082031320741844,
+              "pearson_r": 0.9964250077142051
+            },
+            "repaired_error": {
+              "n": 0,
+              "rmse_uV": null,
+              "mae_uV": null,
+              "p95_absolute_error_uV": null,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 19800,
+              "rmse_uV": 5.004487697140764,
+              "mae_uV": 2.9634606542904876,
+              "p95_absolute_error_uV": 10.082031320741844,
+              "pearson_r": 0.9964250077142051
+            },
+            "longest_missing_run_s": 0.0,
+            "median_channel_pearson_r": 0.9964250077142051
+          },
+          "before_annotation": {
+            "expected_columns": 6480,
+            "observed_fraction": 1.0,
+            "repaired_fraction": 0.0,
+            "missing_fraction": 0.0,
+            "production_feature_valid_fraction": 1.0,
+            "observed_error": {
+              "n": 6480,
+              "rmse_uV": 2.024645444215694,
+              "mae_uV": 1.3934110770711767,
+              "p95_absolute_error_uV": 4.534938733004968,
+              "pearson_r": 0.9973871469619453
+            },
+            "repaired_error": {
+              "n": 0,
+              "rmse_uV": null,
+              "mae_uV": null,
+              "p95_absolute_error_uV": null,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 6480,
+              "rmse_uV": 2.024645444215694,
+              "mae_uV": 1.3934110770711767,
+              "p95_absolute_error_uV": 4.534938733004968,
+              "pearson_r": 0.9973871469619453
+            },
+            "longest_missing_run_s": 0.0,
+            "median_channel_pearson_r": 0.9973871469619453
+          },
+          "annotated_seizure": {
+            "expected_columns": 7200,
+            "observed_fraction": 1.0,
+            "repaired_fraction": 0.0,
+            "missing_fraction": 0.0,
+            "production_feature_valid_fraction": 1.0,
+            "observed_error": {
+              "n": 7200,
+              "rmse_uV": 7.0456891793863985,
+              "mae_uV": 4.452838483727392,
+              "p95_absolute_error_uV": 14.928969786070022,
+              "pearson_r": 0.9963742408487889
+            },
+            "repaired_error": {
+              "n": 0,
+              "rmse_uV": null,
+              "mae_uV": null,
+              "p95_absolute_error_uV": null,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 7200,
+              "rmse_uV": 7.0456891793863985,
+              "mae_uV": 4.452838483727392,
+              "p95_absolute_error_uV": 14.928969786070022,
+              "pearson_r": 0.9963742408487889
+            },
+            "longest_missing_run_s": 0.0,
+            "median_channel_pearson_r": 0.9963742408487889
+          },
+          "after_annotation": {
+            "expected_columns": 6120,
+            "observed_fraction": 1.0,
+            "repaired_fraction": 0.0,
+            "missing_fraction": 0.0,
+            "production_feature_valid_fraction": 1.0,
+            "observed_error": {
+              "n": 6120,
+              "rmse_uV": 4.276125346889453,
+              "mae_uV": 2.873656877891046,
+              "p95_absolute_error_uV": 8.232026210359512,
+              "pearson_r": 0.9966476446298925
+            },
+            "repaired_error": {
+              "n": 0,
+              "rmse_uV": null,
+              "mae_uV": null,
+              "p95_absolute_error_uV": null,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 6120,
+              "rmse_uV": 4.276125346889453,
+              "mae_uV": 2.873656877891046,
+              "p95_absolute_error_uV": 8.232026210359512,
+              "pearson_r": 0.9966476446298925
+            },
+            "longest_missing_run_s": 0.0,
+            "median_channel_pearson_r": 0.9966476446298925
+          }
+        }
+      }
+    },
+    {
+      "condition": "dense_2uv",
+      "identical_recovered_samples_and_masks": true,
+      "before": {
+        "feature_frames": 187,
+        "maximum_analysis_arrival_gap_seconds": 2.0,
+        "timeline_audit": {
+          "duplicate_output_columns": 0,
+          "blocks_off_expected_sample_grid": 0,
+          "out_of_range_output_columns": 0,
+          "worker_errors": 0,
+          "max_trace_end_vs_input_clock_error_s": 0.0,
+          "last_trace_end_s": 3070,
+          "last_feature_end_s": 3070,
+          "trace_blocks": 220,
+          "feature_frames": 187,
+          "input_status_counts": {
+            "Anchoring capture; waiting for new screen data": 1,
+            "New EEG columns reconstructed": 209,
+            "Completed sweep retained; next page starting": 5,
+            "Sweep page boundary": 6
+          },
+          "saved_messages_verified": 629,
+          "input_status_frames_verified": 221
+        },
+        "epochs": {
+          "all": {
+            "expected_columns": 356400,
+            "observed_fraction": 0.3145398428731762,
+            "repaired_fraction": 3.6475869809203144e-05,
+            "missing_fraction": 0.6854236812570146,
+            "production_feature_valid_fraction": 0.008333333333333333,
+            "observed_error": {
+              "n": 112102,
+              "rmse_uV": 28.54858649825673,
+              "mae_uV": 8.695143465947686,
+              "p95_absolute_error_uV": 59.38265338266976,
+              "pearson_r": 0.6035584531199166
+            },
+            "repaired_error": {
+              "n": 13,
+              "rmse_uV": 68.0466742231706,
+              "mae_uV": 54.609118247902416,
+              "p95_absolute_error_uV": 131.411834250738,
+              "pearson_r": 0.8263107344216246
+            },
+            "all_recovered_error": {
+              "n": 112115,
+              "rmse_uV": 28.5563335773893,
+              "mae_uV": 8.70046730015511,
+              "p95_absolute_error_uV": 59.4009788843363,
+              "pearson_r": 0.6037286996817198
+            },
+            "longest_missing_run_s": 9.988888888888889,
+            "median_channel_pearson_r": 0.6400548963988123
+          },
+          "before_annotation": {
+            "expected_columns": 116640,
+            "observed_fraction": 0.6189214677640603,
+            "repaired_fraction": 1.7146776406035666e-05,
+            "missing_fraction": 0.3810613854595336,
+            "production_feature_valid_fraction": 0.02546296296296296,
+            "observed_error": {
+              "n": 72191,
+              "rmse_uV": 8.593363201500175,
+              "mae_uV": 2.6086829607480375,
+              "p95_absolute_error_uV": 6.570752581824822,
+              "pearson_r": 0.9298056152812684
+            },
+            "repaired_error": {
+              "n": 2,
+              "rmse_uV": 14.06825006038523,
+              "mae_uV": 14.00268925655456,
+              "p95_absolute_error_uV": 15.223625868414246,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 72193,
+              "rmse_uV": 8.593563188912821,
+              "mae_uV": 2.6089986147947126,
+              "p95_absolute_error_uV": 6.573256254627361,
+              "pearson_r": 0.9298167688372669
+            },
+            "longest_missing_run_s": 2.172222222222222,
+            "median_channel_pearson_r": 0.9580196752074726
+          },
+          "annotated_seizure": {
+            "expected_columns": 129600,
+            "observed_fraction": 0.11871913580246914,
+            "repaired_fraction": 7.716049382716049e-05,
+            "missing_fraction": 0.8812037037037037,
+            "production_feature_valid_fraction": 0.0,
+            "observed_error": {
+              "n": 15386,
+              "rmse_uV": 55.09125044306205,
+              "mae_uV": 24.364348807155135,
+              "p95_absolute_error_uV": 133.4909693679439,
+              "pearson_r": 0.3761526213252898
+            },
+            "repaired_error": {
+              "n": 10,
+              "rmse_uV": 77.31112644777437,
+              "mae_uV": 67.65639250182043,
+              "p95_absolute_error_uV": 135.12737166626474,
+              "pearson_r": 0.42485244709861725
+            },
+            "all_recovered_error": {
+              "n": 15396,
+              "rmse_uV": 55.108590421094114,
+              "mae_uV": 24.392467827481628,
+              "p95_absolute_error_uV": 133.50762445107785,
+              "pearson_r": 0.3773836109161952
+            },
+            "longest_missing_run_s": 9.988888888888889,
+            "median_channel_pearson_r": 0.36923995601879245
+          },
+          "after_annotation": {
+            "expected_columns": 110160,
+            "observed_fraction": 0.22263071895424835,
+            "repaired_fraction": 9.077705156136529e-06,
+            "missing_fraction": 0.7773602033405955,
+            "production_feature_valid_fraction": 0.0,
+            "observed_error": {
+              "n": 24525,
+              "rmse_uV": 40.049586113424006,
+              "mae_uV": 16.780822444583766,
+              "p95_absolute_error_uV": 99.43004973304794,
+              "pearson_r": 0.4832592567428987
+            },
+            "repaired_error": {
+              "n": 1,
+              "rmse_uV": 5.349233691417979,
+              "mae_uV": 5.349233691417979,
+              "p95_absolute_error_uV": 5.349233691417979,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 24526,
+              "rmse_uV": 40.048784198964015,
+              "mae_uV": 16.780356343762058,
+              "p95_absolute_error_uV": 99.42874238669637,
+              "pearson_r": 0.48329631700688763
+            },
+            "longest_missing_run_s": 4.277777777777778,
+            "median_channel_pearson_r": 0.5464441501576527
+          }
+        }
+      },
+      "after": {
+        "feature_frames": 199,
+        "maximum_analysis_arrival_gap_seconds": 2.0,
+        "timeline_audit": {
+          "duplicate_output_columns": 0,
+          "blocks_off_expected_sample_grid": 0,
+          "out_of_range_output_columns": 0,
+          "worker_errors": 0,
+          "max_trace_end_vs_input_clock_error_s": 0.0,
+          "last_trace_end_s": 3070,
+          "last_feature_end_s": 3070,
+          "trace_blocks": 220,
+          "feature_frames": 199,
+          "input_status_counts": {
+            "Anchoring capture; waiting for new screen data": 1,
+            "New EEG columns reconstructed": 209,
+            "Completed sweep retained; next page starting": 5,
+            "Sweep page boundary": 6
+          },
+          "saved_messages_verified": 641,
+          "input_status_frames_verified": 221
+        },
+        "epochs": {
+          "all": {
+            "expected_columns": 356400,
+            "observed_fraction": 0.3145398428731762,
+            "repaired_fraction": 3.6475869809203144e-05,
+            "missing_fraction": 0.6854236812570146,
+            "production_feature_valid_fraction": 0.008585858585858586,
+            "observed_error": {
+              "n": 112102,
+              "rmse_uV": 28.54858649825673,
+              "mae_uV": 8.695143465947686,
+              "p95_absolute_error_uV": 59.38265338266976,
+              "pearson_r": 0.6035584531199166
+            },
+            "repaired_error": {
+              "n": 13,
+              "rmse_uV": 68.0466742231706,
+              "mae_uV": 54.609118247902416,
+              "p95_absolute_error_uV": 131.411834250738,
+              "pearson_r": 0.8263107344216246
+            },
+            "all_recovered_error": {
+              "n": 112115,
+              "rmse_uV": 28.5563335773893,
+              "mae_uV": 8.70046730015511,
+              "p95_absolute_error_uV": 59.4009788843363,
+              "pearson_r": 0.6037286996817198
+            },
+            "longest_missing_run_s": 9.988888888888889,
+            "median_channel_pearson_r": 0.6400548963988123
+          },
+          "before_annotation": {
+            "expected_columns": 116640,
+            "observed_fraction": 0.6189214677640603,
+            "repaired_fraction": 1.7146776406035666e-05,
+            "missing_fraction": 0.3810613854595336,
+            "production_feature_valid_fraction": 0.026234567901234566,
+            "observed_error": {
+              "n": 72191,
+              "rmse_uV": 8.593363201500175,
+              "mae_uV": 2.6086829607480375,
+              "p95_absolute_error_uV": 6.570752581824822,
+              "pearson_r": 0.9298056152812684
+            },
+            "repaired_error": {
+              "n": 2,
+              "rmse_uV": 14.06825006038523,
+              "mae_uV": 14.00268925655456,
+              "p95_absolute_error_uV": 15.223625868414246,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 72193,
+              "rmse_uV": 8.593563188912821,
+              "mae_uV": 2.6089986147947126,
+              "p95_absolute_error_uV": 6.573256254627361,
+              "pearson_r": 0.9298167688372669
+            },
+            "longest_missing_run_s": 2.172222222222222,
+            "median_channel_pearson_r": 0.9580196752074726
+          },
+          "annotated_seizure": {
+            "expected_columns": 129600,
+            "observed_fraction": 0.11871913580246914,
+            "repaired_fraction": 7.716049382716049e-05,
+            "missing_fraction": 0.8812037037037037,
+            "production_feature_valid_fraction": 0.0,
+            "observed_error": {
+              "n": 15386,
+              "rmse_uV": 55.09125044306205,
+              "mae_uV": 24.364348807155135,
+              "p95_absolute_error_uV": 133.4909693679439,
+              "pearson_r": 0.3761526213252898
+            },
+            "repaired_error": {
+              "n": 10,
+              "rmse_uV": 77.31112644777437,
+              "mae_uV": 67.65639250182043,
+              "p95_absolute_error_uV": 135.12737166626474,
+              "pearson_r": 0.42485244709861725
+            },
+            "all_recovered_error": {
+              "n": 15396,
+              "rmse_uV": 55.108590421094114,
+              "mae_uV": 24.392467827481628,
+              "p95_absolute_error_uV": 133.50762445107785,
+              "pearson_r": 0.3773836109161952
+            },
+            "longest_missing_run_s": 9.988888888888889,
+            "median_channel_pearson_r": 0.36923995601879245
+          },
+          "after_annotation": {
+            "expected_columns": 110160,
+            "observed_fraction": 0.22263071895424835,
+            "repaired_fraction": 9.077705156136529e-06,
+            "missing_fraction": 0.7773602033405955,
+            "production_feature_valid_fraction": 0.0,
+            "observed_error": {
+              "n": 24525,
+              "rmse_uV": 40.049586113424006,
+              "mae_uV": 16.780822444583766,
+              "p95_absolute_error_uV": 99.43004973304794,
+              "pearson_r": 0.4832592567428987
+            },
+            "repaired_error": {
+              "n": 1,
+              "rmse_uV": 5.349233691417979,
+              "mae_uV": 5.349233691417979,
+              "p95_absolute_error_uV": 5.349233691417979,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 24526,
+              "rmse_uV": 40.048784198964015,
+              "mae_uV": 16.780356343762058,
+              "p95_absolute_error_uV": 99.42874238669637,
+              "pearson_r": 0.48329631700688763
+            },
+            "longest_missing_run_s": 4.277777777777778,
+            "median_channel_pearson_r": 0.5464441501576527
+          }
+        }
+      }
+    },
+    {
+      "condition": "dense_6uv",
+      "identical_recovered_samples_and_masks": true,
+      "before": {
+        "feature_frames": 187,
+        "maximum_analysis_arrival_gap_seconds": 2.0,
+        "timeline_audit": {
+          "duplicate_output_columns": 0,
+          "blocks_off_expected_sample_grid": 0,
+          "out_of_range_output_columns": 0,
+          "worker_errors": 0,
+          "max_trace_end_vs_input_clock_error_s": 0.0,
+          "last_trace_end_s": 3070,
+          "last_feature_end_s": 3070,
+          "trace_blocks": 220,
+          "feature_frames": 187,
+          "input_status_counts": {
+            "Anchoring capture; waiting for new screen data": 1,
+            "New EEG columns reconstructed": 209,
+            "Completed sweep retained; next page starting": 11
+          },
+          "saved_messages_verified": 629,
+          "input_status_frames_verified": 221
+        },
+        "epochs": {
+          "all": {
+            "expected_columns": 356400,
+            "observed_fraction": 0.7987542087542088,
+            "repaired_fraction": 2.8058361391694725e-06,
+            "missing_fraction": 0.20124298540965208,
+            "production_feature_valid_fraction": 0.322979797979798,
+            "observed_error": {
+              "n": 284676,
+              "rmse_uV": 15.174789413016486,
+              "mae_uV": 4.044528214382977,
+              "p95_absolute_error_uV": 11.324236850325876,
+              "pearson_r": 0.9559568720944207
+            },
+            "repaired_error": {
+              "n": 1,
+              "rmse_uV": 0.9957228441414543,
+              "mae_uV": 0.9957228441414543,
+              "p95_absolute_error_uV": 0.9957228441414543,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 284677,
+              "rmse_uV": 15.174762875104456,
+              "mae_uV": 4.044517504682614,
+              "p95_absolute_error_uV": 11.324225976673821,
+              "pearson_r": 0.9559595145501432
+            },
+            "longest_missing_run_s": 4.5,
+            "median_channel_pearson_r": 0.972246378469622
+          },
+          "before_annotation": {
+            "expected_columns": 116640,
+            "observed_fraction": 0.9840877914951989,
+            "repaired_fraction": 0.0,
+            "missing_fraction": 0.015912208504801097,
+            "production_feature_valid_fraction": 0.6682098765432098,
+            "observed_error": {
+              "n": 114784,
+              "rmse_uV": 3.4829279371558632,
+              "mae_uV": 2.2259557368099974,
+              "p95_absolute_error_uV": 7.512742045576313,
+              "pearson_r": 0.9957428096661489
+            },
+            "repaired_error": {
+              "n": 0,
+              "rmse_uV": null,
+              "mae_uV": null,
+              "p95_absolute_error_uV": null,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 114784,
+              "rmse_uV": 3.4829279371558632,
+              "mae_uV": 2.2259557368099974,
+              "p95_absolute_error_uV": 7.512742045576313,
+              "pearson_r": 0.9957428096661489
+            },
+            "longest_missing_run_s": 2.0388888888888888,
+            "median_channel_pearson_r": 0.9960960747502248
+          },
+          "annotated_seizure": {
+            "expected_columns": 129600,
+            "observed_fraction": 0.6031018518518518,
+            "repaired_fraction": 7.71604938271605e-06,
+            "missing_fraction": 0.39689043209876546,
+            "production_feature_valid_fraction": 0.11319444444444444,
+            "observed_error": {
+              "n": 78162,
+              "rmse_uV": 27.31304919654393,
+              "mae_uV": 7.349243262191307,
+              "p95_absolute_error_uV": 18.04453013155095,
+              "pearson_r": 0.9090778246372054
+            },
+            "repaired_error": {
+              "n": 1,
+              "rmse_uV": 0.9957228441414543,
+              "mae_uV": 0.9957228441414543,
+              "p95_absolute_error_uV": 0.9957228441414543,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 78163,
+              "rmse_uV": 27.312874709661944,
+              "mae_uV": 7.349161976667237,
+              "p95_absolute_error_uV": 18.044465709856095,
+              "pearson_r": 0.9090904573176716
+            },
+            "longest_missing_run_s": 3.272222222222222,
+            "median_channel_pearson_r": 0.9460913592223614
+          },
+          "after_annotation": {
+            "expected_columns": 110160,
+            "observed_fraction": 0.8326978939724038,
+            "repaired_fraction": 0.0,
+            "missing_fraction": 0.16730210602759624,
+            "production_feature_valid_fraction": 0.2042483660130719,
+            "observed_error": {
+              "n": 91730,
+              "rmse_uV": 7.987281311406576,
+              "mae_uV": 3.504245708103047,
+              "p95_absolute_error_uV": 10.866505119970506,
+              "pearson_r": 0.9907069278847677
+            },
+            "repaired_error": {
+              "n": 0,
+              "rmse_uV": null,
+              "mae_uV": null,
+              "p95_absolute_error_uV": null,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 91730,
+              "rmse_uV": 7.987281311406576,
+              "mae_uV": 3.504245708103047,
+              "p95_absolute_error_uV": 10.866505119970506,
+              "pearson_r": 0.9907069278847677
+            },
+            "longest_missing_run_s": 4.5,
+            "median_channel_pearson_r": 0.9944939780064985
+          }
+        }
+      },
+      "after": {
+        "feature_frames": 217,
+        "maximum_analysis_arrival_gap_seconds": 0.5,
+        "timeline_audit": {
+          "duplicate_output_columns": 0,
+          "blocks_off_expected_sample_grid": 0,
+          "out_of_range_output_columns": 0,
+          "worker_errors": 0,
+          "max_trace_end_vs_input_clock_error_s": 0.0,
+          "last_trace_end_s": 3070,
+          "last_feature_end_s": 3070,
+          "trace_blocks": 220,
+          "feature_frames": 217,
+          "input_status_counts": {
+            "Anchoring capture; waiting for new screen data": 1,
+            "New EEG columns reconstructed": 209,
+            "Completed sweep retained; next page starting": 11
+          },
+          "saved_messages_verified": 659,
+          "input_status_frames_verified": 221
+        },
+        "epochs": {
+          "all": {
+            "expected_columns": 356400,
+            "observed_fraction": 0.7987542087542088,
+            "repaired_fraction": 2.8058361391694725e-06,
+            "missing_fraction": 0.20124298540965208,
+            "production_feature_valid_fraction": 0.3194444444444444,
+            "observed_error": {
+              "n": 284676,
+              "rmse_uV": 15.174789413016486,
+              "mae_uV": 4.044528214382977,
+              "p95_absolute_error_uV": 11.324236850325876,
+              "pearson_r": 0.9559568720944207
+            },
+            "repaired_error": {
+              "n": 1,
+              "rmse_uV": 0.9957228441414543,
+              "mae_uV": 0.9957228441414543,
+              "p95_absolute_error_uV": 0.9957228441414543,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 284677,
+              "rmse_uV": 15.174762875104456,
+              "mae_uV": 4.044517504682614,
+              "p95_absolute_error_uV": 11.324225976673821,
+              "pearson_r": 0.9559595145501432
+            },
+            "longest_missing_run_s": 4.5,
+            "median_channel_pearson_r": 0.972246378469622
+          },
+          "before_annotation": {
+            "expected_columns": 116640,
+            "observed_fraction": 0.9840877914951989,
+            "repaired_fraction": 0.0,
+            "missing_fraction": 0.015912208504801097,
+            "production_feature_valid_fraction": 0.6620370370370371,
+            "observed_error": {
+              "n": 114784,
+              "rmse_uV": 3.4829279371558632,
+              "mae_uV": 2.2259557368099974,
+              "p95_absolute_error_uV": 7.512742045576313,
+              "pearson_r": 0.9957428096661489
+            },
+            "repaired_error": {
+              "n": 0,
+              "rmse_uV": null,
+              "mae_uV": null,
+              "p95_absolute_error_uV": null,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 114784,
+              "rmse_uV": 3.4829279371558632,
+              "mae_uV": 2.2259557368099974,
+              "p95_absolute_error_uV": 7.512742045576313,
+              "pearson_r": 0.9957428096661489
+            },
+            "longest_missing_run_s": 2.0388888888888888,
+            "median_channel_pearson_r": 0.9960960747502248
+          },
+          "annotated_seizure": {
+            "expected_columns": 129600,
+            "observed_fraction": 0.6031018518518518,
+            "repaired_fraction": 7.71604938271605e-06,
+            "missing_fraction": 0.39689043209876546,
+            "production_feature_valid_fraction": 0.11041666666666666,
+            "observed_error": {
+              "n": 78162,
+              "rmse_uV": 27.31304919654393,
+              "mae_uV": 7.349243262191307,
+              "p95_absolute_error_uV": 18.04453013155095,
+              "pearson_r": 0.9090778246372054
+            },
+            "repaired_error": {
+              "n": 1,
+              "rmse_uV": 0.9957228441414543,
+              "mae_uV": 0.9957228441414543,
+              "p95_absolute_error_uV": 0.9957228441414543,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 78163,
+              "rmse_uV": 27.312874709661944,
+              "mae_uV": 7.349161976667237,
+              "p95_absolute_error_uV": 18.044465709856095,
+              "pearson_r": 0.9090904573176716
+            },
+            "longest_missing_run_s": 3.272222222222222,
+            "median_channel_pearson_r": 0.9460913592223614
+          },
+          "after_annotation": {
+            "expected_columns": 110160,
+            "observed_fraction": 0.8326978939724038,
+            "repaired_fraction": 0.0,
+            "missing_fraction": 0.16730210602759624,
+            "production_feature_valid_fraction": 0.20261437908496732,
+            "observed_error": {
+              "n": 91730,
+              "rmse_uV": 7.987281311406576,
+              "mae_uV": 3.504245708103047,
+              "p95_absolute_error_uV": 10.866505119970506,
+              "pearson_r": 0.9907069278847677
+            },
+            "repaired_error": {
+              "n": 0,
+              "rmse_uV": null,
+              "mae_uV": null,
+              "p95_absolute_error_uV": null,
+              "pearson_r": null
+            },
+            "all_recovered_error": {
+              "n": 91730,
+              "rmse_uV": 7.987281311406576,
+              "mae_uV": 3.504245708103047,
+              "p95_absolute_error_uV": 10.866505119970506,
+              "pearson_r": 0.9907069278847677
+            },
+            "longest_missing_run_s": 4.5,
+            "median_channel_pearson_r": 0.9944939780064985
+          }
+        }
+      }
+    }
+  ],
+  "browser_test": {
+    "method": "Canvas video stream through BrowserCapture and production Worker; not OS window sharing",
+    "duration_seconds": 28,
+    "analysis_frames": 52,
+    "valid_frames_both_channels": 42,
+    "missing_or_partial_frames": 10,
+    "recovered_after_gap": true,
+    "main_canvas_composite_draws": 834,
+    "maximum_full_scene_ms": 169.3,
+    "errors": [],
+    "renderer": "Software field",
+    "limitations": [
+      "OS sharing picker not operable in cloud browser",
+      "Hardware WebGL context unavailable",
+      "No acoustic speaker validation"
+    ]
+  },
+  "automated_tests_passed": 168
+}

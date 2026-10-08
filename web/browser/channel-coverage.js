@@ -35,6 +35,7 @@ export class ChannelCoverage {
     const channels = new Map(frame.channels.map((c) => [c.name, c]));
     for (const row of this.rows.values()) {
       const c = channels.get(row.name);
+      row.analysis = c?.analysis || null;
       const usableStart = Math.max(from, frame.waveform?.start ?? from);
       const seconds =
         !frame.mixed && !frame.gaps && c?.valid && c.status === 'observed'

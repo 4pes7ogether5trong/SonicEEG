@@ -15,7 +15,15 @@ export function captureStatusMessage(message) {
   if (!accepted) return `${progression} · ${reason || 'Waiting for new EEG columns'}`;
   if (usableChannels == null)
     return `${progression} · Receiving EEG columns · building the first 2-second analysis window`;
-  if (!usableChannels)
-    return `${progression} · Receiving trace fragments · no complete, qualified 2-second analysis window`;
+  if (!usableChannels) {
+    const missing = (message.analysis || []).filter((c) => c.reason === 'missing');
+    const repairs = (message.analysis || []).filter((c) => c.reason === 'repairs');
+    const detail = missing.length
+      ? ` · ${missing.length} rows have missing or ambiguous samples; longest available run ${Math.max(...missing.map((c) => c.contiguousSeconds || 0)).toFixed(1)}s. Increase row spacing or show fewer traces.`
+      : repairs.length
+        ? ` · ${repairs.length} rows exceed the repaired-pixel limit. Increase source resolution.`
+        : '';
+    return `${progression} · Receiving trace fragments · no complete, qualified 2-second analysis window${detail}`;
+  }
   return `${progression} · ${usableChannels}/${channels.length} captured channels analyzed · ${reason}`;
 }

@@ -11,6 +11,13 @@ import {
 } from './water-math.js';
 import { regionalArchitectures } from './fluid-episodes.js';
 import { WaveformClock } from './waveform-clock.js';
+import {
+  canBlendCloud,
+  cloudContext,
+  cloudKey,
+  cloudEase,
+  CLOUD_TRANSITION_MS,
+} from './cloud-motion.js';
 
 const vertex = `
 uniform sampler2D waves;
@@ -158,15 +165,43 @@ export class WaterRenderer {
     return m;
   }
   update(frames, options, placement) {
+    const now = performance.now();
+    const blend = canBlendCloud(this.cloud, frames, options);
+    const oldVisible = this.surfaces.filter((m) => m.visible && !m.userData.retiring);
+    if (blend) this.animate(now);
     if (options.frozen && !this.options?.frozen)
       for (const m of this.surfaces) m.userData.heldLag = m.material.uniforms.lag.value;
     this.options = options;
     this.hide();
+    const used = new Set();
     let di = 0;
     frames.forEach((f, i) => {
+      const key = cloudKey(f);
+      let index = i;
+      if (blend) {
+        index = this.surfaces.findIndex((m) => !used.has(m) && m.userData.cloudKey === key);
+        if (index < 0)
+          index = this.surfaces.findIndex((m) => !used.has(m) && !oldVisible.includes(m));
+        if (index < 0) index = this.surfaces.length;
+      }
       const place = placement(f),
-        m = this.mesh(i, options.mode === 'live'),
+        m = this.mesh(index, options.mode === 'live'),
         u = m.material.uniforms;
+      const retained = blend && oldVisible.includes(m) && m.userData.cloudKey === key;
+      const fromRadial = retained ? u.radial.value : place.radial;
+      const fromOpacity = retained ? u.opacity.value : 0;
+      used.add(m);
+      m.userData.cloudKey = key;
+      m.userData.retiring = false;
+      m.userData.motion = blend
+        ? {
+            start: now,
+            radial: fromRadial,
+            targetRadial: place.radial,
+            opacity: fromOpacity,
+            targetOpacity: 0.34,
+          }
+        : null;
       m.visible = true;
       m.position.set(place.offset, 0, 0);
       m.scale.setScalar(place.scale);
@@ -272,16 +307,43 @@ export class WaterRenderer {
             scale: dp.scale,
             channels: cs,
             surface: m,
+            opacity: e.opacity,
           };
           di++;
         }
       }
     });
+    if (blend)
+      for (const m of oldVisible)
+        if (!used.has(m)) {
+          m.visible = true;
+          m.userData.retiring = true;
+          m.userData.motion = {
+            start: now,
+            radial: m.material.uniforms.radial.value,
+            targetRadial: m.material.uniforms.radial.value,
+            opacity: m.material.uniforms.opacity.value,
+            targetOpacity: 0,
+          };
+        }
+    this.cloud = { end: options.total, context: cloudContext(frames, options) };
     this.animate(performance.now());
   }
   animate(now) {
+    if (!this.options) return;
     for (const m of this.surfaces)
       if (m.visible) {
+        const move = m.userData.motion;
+        if (move) {
+          const t = cloudEase(now - move.start);
+          m.material.uniforms.radial.value = move.radial + (move.targetRadial - move.radial) * t;
+          m.material.uniforms.opacity.value =
+            move.opacity + (move.targetOpacity - move.opacity) * t;
+          if (now - move.start >= CLOUD_TRANSITION_MS) {
+            m.userData.motion = null;
+            if (m.userData.retiring) m.visible = false;
+          }
+        }
         const moving = this.options.animate && this.options.mode === 'live';
         m.material.uniforms.lag.value = this.options.frozen
           ? m.userData.heldLag || 0
@@ -290,9 +352,13 @@ export class WaterRenderer {
             : 0;
       }
     for (const d of this.drops)
-      if (d.visible && d.userData.architecture.active) {
+      if (d.visible) {
         const x = d.userData,
           lag = x.surface.material.uniforms.lag.value;
+        d.material.opacity =
+          x.opacity *
+          (this.options.mode === 'history' ? x.surface.material.uniforms.opacity.value / 0.34 : 1);
+        if (!x.architecture.active) continue;
         const height =
           waterAt(x.architecture.position, x.channels, { scale: this.options.scale, lag }).height +
           0.075 * x.architecture.size;

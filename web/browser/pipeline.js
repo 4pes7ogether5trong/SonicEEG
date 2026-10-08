@@ -16,8 +16,13 @@ export class FeaturePipeline {
     this.segment = null;
     this.rate = null;
     this.sharpSeen = new Map();
+    this.inputEnd = null;
+    this.layout = null;
   }
   gap(start, end, settings, segment, source, screenRedraw = false) {
+    // A verified sweep wrap with no missing columns is continuous EEG.
+    // Resetting here threw away two seconds of analysis after every page.
+    if (!(end > start + 1e-7)) return;
     this.reset();
     if (end > start)
       this.onFrame({
@@ -36,11 +41,52 @@ export class FeaturePipeline {
     block,
     { settings = {}, segment = '0', source = 'screen', expected = [], flush = false } = {},
   ) {
-    if (this.segment !== segment || this.rate !== block.rate) {
+    const layout = block.channels.map((c) => c.name).join('|');
+    if (this.segment !== segment || this.rate !== block.rate || this.layout !== layout) {
       this.reset();
       this.segment = segment;
       this.rate = block.rate;
+      this.layout = layout;
     }
+    const count = block.channels[0]?.samples.length || 0;
+    if (!count || !(block.rate > 0) || block.channels.some((c) => c.samples.length !== count))
+      return;
+    if (this.inputEnd != null && block.start < this.inputEnd - 1e-6) return;
+    if (this.inputEnd != null && block.start > this.inputEnd + 1e-6) {
+      this.gap(this.lastEnd ?? this.inputEnd, block.start, settings, segment, source);
+      this.segment = segment;
+      this.rate = block.rate;
+      this.layout = layout;
+    }
+    const metadata = { settings, segment, source, expected };
+    // Evaluate at a source-sample cadence, independent of video/worker arrival
+    // sizes. A later bad column must not erase an earlier complete window in
+    // the same batch; large updates must not silently skip usable intervals.
+    let from = 0;
+    while (from < count) {
+      const available = this.buffer.get(block.channels[0].name)?.length || 0;
+      const until =
+        available < Math.ceil(block.rate * 2)
+          ? Math.ceil(block.rate * 2) - available
+          : Math.max(1, Math.ceil(block.rate * 0.5) - this.since);
+      const to = Math.min(count, from + until);
+      const part = {
+        ...block,
+        start: block.start + from / block.rate,
+        duration: (to - from) / block.rate,
+        channels: block.channels.map((c) => ({
+          ...c,
+          samples: c.samples.slice(from, to),
+          observed: c.observed?.slice(from, to),
+          clippedPixels: c.clippedPixels?.slice(from, to),
+        })),
+      };
+      this.ingestChunk(part, { ...metadata, flush: flush && to === count });
+      from = to;
+    }
+    this.inputEnd = block.start + count / block.rate;
+  }
+  ingestChunk(block, { settings, segment, source, expected, flush }) {
     const count = block.channels[0].samples.length,
       rate = block.rate;
     for (const c of block.channels) {
@@ -82,7 +128,7 @@ export class FeaturePipeline {
       return {
         ...c,
         segment,
-        start: end - 2,
+        start: end - samples.length / rate,
         rate,
         samples,
         status: 'observed',
@@ -98,6 +144,30 @@ export class FeaturePipeline {
     const channels = rows.map((c) => {
       const f =
         c.valid === false ? { valid: false, bands: [] } : analyze(c.samples, rate, settings);
+      let missing = 0,
+        run = 0,
+        longest = 0;
+      for (const value of c.samples) {
+        if (!Number.isFinite(value)) {
+          missing++;
+          run = 0;
+        } else {
+          run++;
+          longest = Math.max(longest, run);
+        }
+      }
+      const analysis = {
+        reason: f.valid
+          ? 'ready'
+          : missing
+            ? 'missing'
+            : c.reconstructed >= 0.05
+              ? 'repairs'
+              : 'quality',
+        missingFraction: c.samples.length ? missing / c.samples.length : 1,
+        contiguousSeconds: longest / rate,
+        repairedFraction: c.reconstructed || 0,
+      };
       const transients =
         f.valid && c.status === 'observed'
           ? transientFeatures(c.samples, rate, c.start)
@@ -111,6 +181,7 @@ export class FeaturePipeline {
         status: c.status,
         from: c.from,
         ...f,
+        analysis,
         visual:
           f.valid && c.status === 'observed'
             ? {
@@ -140,7 +211,9 @@ export class FeaturePipeline {
         channels,
         // Screen voltages already reference the confirmed row baseline. A new
         // rolling-window mean would shift the same sample at each update.
-        waveform: waveformSnapshot(rows, channels, end - 2, rate, { center: source !== 'screen' }),
+        waveform: waveformSnapshot(rows, channels, end - Math.ceil(rate * 2) / rate, rate, {
+          center: source !== 'screen',
+        }),
         gaps: 0,
         leaves: 1,
         rate,

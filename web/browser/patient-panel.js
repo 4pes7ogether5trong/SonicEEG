@@ -340,9 +340,13 @@ export function mountPatient(
           r.name,
           r.current && !lost
             ? 'Usable'
-            : trace?.current && active && traceAge < 2.5
-              ? 'Trace only'
-              : 'Unavailable',
+            : active && !lost && r.analysis?.reason === 'missing'
+              ? `Gaps · ${(100 * r.analysis.missingFraction).toFixed(1)}% of window; ${r.analysis.contiguousSeconds.toFixed(1)}s continuous`
+              : active && !lost && r.analysis?.reason === 'repairs'
+                ? 'Too many repaired pixels'
+                : trace?.current && active && traceAge < 2.5
+                  ? 'Trace only'
+                  : 'Unavailable',
           trace ? `${trace.percent.toFixed(1)}%` : '—',
           trace?.elapsed ? `${((100 * trace.repaired) / trace.elapsed).toFixed(1)}%` : '—',
           trace?.elapsed
@@ -592,6 +596,7 @@ export function mountPatient(
     $('setup-preview').width = 0;
     $('recognize').disabled = false;
     $('begin').disabled = false;
+    $('capture').disabled = false;
     $('begin').textContent = 'Start capture + sound';
     $('capture-sound').hidden = true;
     audio.stop(slot);
@@ -616,6 +621,10 @@ export function mountPatient(
   async function launchCapture() {
     stop();
     const token = operation;
+    $('capture').disabled = true;
+    status(
+      'Waiting for the browser sharing picker. Choose the EEG window or tab and select Share. Stop all cancels this request.',
+    );
     try {
       await capture.start(() => stop());
       if (token !== operation) return;
@@ -646,7 +655,10 @@ export function mountPatient(
       drawPreview();
       status('Select the source regions and confirm the capture setup.');
     } catch (e) {
-      status(e.message || 'Window capture was cancelled or blocked.', true);
+      if (token === operation)
+        status(e.message || 'Window capture was cancelled or blocked.', true);
+    } finally {
+      if (token === operation) $('capture').disabled = false;
     }
   }
   function drawPreview(overlay = null) {
