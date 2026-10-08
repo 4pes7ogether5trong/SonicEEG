@@ -15,5 +15,7 @@ for (const file of ['index.html', 'styles.css', 'bundle.js', 'bundle.js.LEGAL.tx
     if (!file.endsWith('.LEGAL.txt')) throw error;
   });
 }
+await mkdir('dist/cymatic', { recursive: true });
+await copyFile('browser/cymatic-demo.html', 'dist/cymatic/index.html');
 const index = await readFile('dist/index.html', 'utf8');
 await writeFile('dist/index.html', index.replace('<footer>', '<footer><a href="./analysis-v2/">Earlier waveform workspace</a>'));
