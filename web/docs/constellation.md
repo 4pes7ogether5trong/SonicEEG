@@ -1,0 +1,9 @@
+# Constellation view — 8 October 2026
+
+Replaces the Recent stack display option. Channels become stars at their montage positions (bipolar channels use their pair's midpoint). The selected interval forms the inner constellation. Up to twelve earlier summaries appear outward, with the existing frequency, baseline, amplitude, band, section, and channel controls. The surface-style selector is hidden while Constellation is selected.
+
+Nearby stars are joined by a sparse position-based guide. These links do not encode correlation, synchrony, propagation, or brain connectivity. Historical links follow the same channel only through contiguous, valid intervals with matching source, segment, settings and derivation status. Missing measurements use hollow markers; unmappable channel names are omitted. Scrubbing excludes measurements after the selected interval. Frozen views retain their measured frame set.
+
+Both WebGL and software rendering use the same node and link data. Transitions ease visual position, color, size and opacity over 360 ms, without synthesizing EEG samples. Freeze, reduced motion, capture gaps, and changed source/availability bypass blending. Channel selection by clicking the current stars and the existing channel selector remains available. Historical stars are not click targets.
+
+Validation: 173 automated tests passed, including five constellation tests for bounded history, no future-data leakage, missingness, context/gap boundaries, GPU object lifecycle and motion, freeze, reduced motion, and software drawing/selection targets. Application syntax, UI reference and network checks passed; production builds succeeded. The production software drawing method was rendered at 1200×740 and 390×420 using a 30-second synthetic EEG pipeline run and visually inspected. `constellation-preview.png` is a synthetic software rendering, not a browser screenshot. Interactive browser and GPU shader execution were not verified in this run.

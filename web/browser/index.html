@@ -214,14 +214,14 @@
         </details>
       </details>
       <p data-id="coverage-view-warning" class="coverage-warning" hidden>
-        Capture unavailable · dome shows the last measured interval
+        Capture unavailable · view shows the last measured interval
       </p>
       <main>
         <section class="field-workspace" aria-label="EEG visualization">
           <div class="viewbar">
             <div class="segmented" aria-label="View">
               <button data-view="live" aria-pressed="true">Live field</button
-              ><button data-view="recent" aria-pressed="false">Recent stack</button
+              ><button data-view="constellation" aria-pressed="false">Constellation</button
               ><button data-view="history" aria-pressed="false">Whole history</button
               ><button data-view="side" aria-pressed="false">Side profile</button>
             </div>
@@ -738,13 +738,20 @@
           extreme deflections are capped. Select one channel to separate overlapping strips.
         </p>
         <p>
-          Recent stack shows up to six nonoverlapping retained windows, oldest at left. Whole
-          history and Side profile show representative windows selected for sharp candidates, then
-          amplitude; these are examples, not averages or a continuous waveform archive. Compressed
-          intervals can omit other shapes. The selected interval's example time appears beneath the
-          time slider. Choose Spectral field for power summaries or a baseline map. Band selection
-          colors relief; it does not filter its waveform. Older saved sessions may have no waveform
-          relief.
+          Constellation turns each channel into a star at its montage position. Bright inner stars
+          show the selected interval; faint outward trails show earlier retained measurements.
+          Hollow stars indicate unavailable channels. Color and brightness follow the selected
+          frequency or baseline map. Lines between nearby stars are spatial guides, not measured
+          connectivity; outward lines follow the same channel through contiguous intervals. Click a
+          bright star to inspect its channel.
+        </p>
+        <p>
+          Whole history and Side profile show representative windows selected for sharp candidates,
+          then amplitude; these are examples, not averages or a continuous waveform archive.
+          Compressed intervals can omit other shapes. The selected interval's example time appears
+          beneath the time slider. Choose Spectral field for power summaries or a baseline map. Band
+          selection colors relief; it does not filter its waveform. Older saved sessions may have no
+          waveform relief.
         </p>
         <p>
           Whole history places older intervals outward. Side profile spreads them along an axis.

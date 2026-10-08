@@ -24,7 +24,7 @@ import {
 } from './capture-setup.js';
 import { BrowserCapture } from './capture.js';
 import { FluidField } from './field.js';
-import { recentWaveforms } from './waveform.js';
+import { constellationFrames } from './constellation.js';
 import { FluidEpisodes, visibleDroplets, mergeDroplets, PATTERN_NAMES } from './fluid-episodes.js';
 import { patientDemoBlock, DEMO_LENGTH } from './demo.js';
 import {
@@ -113,7 +113,7 @@ export function mountPatient(
     watchedLabels = null,
     frozenFrame = null,
     frozenFrames = null,
-    frozenRecent = null,
+    frozenConstellation = null,
     frozenEnd = 0,
     demoKind = 'guided';
   function ensureField() {
@@ -398,27 +398,28 @@ export function mountPatient(
     if ($('follow').checked) $('time').value = String(shownEnd);
     const focus = Number($('time').value),
       frequencyMap = $('color-mode').value === 'frequency',
-      fluid = frequencyMap && $('surface-mode').value === 'fluid',
-      relief = frequencyMap && $('surface-mode').value !== 'spectrum',
-      frames =
-        mode === 'recent'
-          ? paused
-            ? frozenRecent
-            : recentWaveforms(historyDetail || history.bins(), focus)
-          : mode === 'live'
-            ? [f]
-            : paused
-              ? frozenFrames
-              : historyDetail
-                ? summarizeFrames(historyDetail)
-                : history.overview(relief ? 8 : 16),
+      constellation = mode === 'constellation',
+      fluid = !constellation && frequencyMap && $('surface-mode').value === 'fluid',
+      relief = !constellation && frequencyMap && $('surface-mode').value !== 'spectrum',
+      frames = constellation
+        ? paused
+          ? frozenConstellation
+          : constellationFrames(history.bins(), f)
+        : mode === 'live'
+          ? [f]
+          : paused
+            ? frozenFrames
+            : historyDetail
+              ? summarizeFrames(historyDetail)
+              : history.overview(relief ? 8 : 16),
       threshold =
         !relief && $('statistic').value === 'prevalence'
           ? Number($('occupancy-threshold').value)
           : -1;
-    $('surface-mode').disabled = !frequencyMap;
+    $('surface-mode').disabled = !frequencyMap || constellation;
+    $('surface-mode').hidden = constellation;
     $('color-off').disabled = !frequencyMap;
-    $('statistic').disabled = !frequencyMap || relief || mode === 'recent';
+    $('statistic').disabled = !frequencyMap || relief;
     $('occupancy-threshold').disabled = threshold < 0 || !frequencyMap;
     $('scale').disabled = threshold >= 0 || !frequencyMap;
     const historyDrops =
@@ -433,7 +434,7 @@ export function mountPatient(
         : [];
     field.update(frames, {
       map: $('color-mode').value,
-      mode: mode === 'recent' ? 'side' : mode,
+      mode,
       relief,
       fluid,
       animate: !paused && active && $('follow').checked,
@@ -445,32 +446,33 @@ export function mountPatient(
           { kind: $('pattern-kind').value, selected },
         ),
       monochrome: frequencyMap && $('color-off').checked,
-      recent: mode === 'recent',
-      rangeStart: mode === 'recent' ? frames[0]?.start || 0 : 0,
+      rangeStart: 0,
       band,
       selected,
       scale: Number($('scale').value),
       lens: Number($('time-lens').value),
       focus,
-      total: mode === 'recent' ? frames.at(-1)?.end || focus : shownEnd,
+      total: constellation ? f.end : shownEnd,
       cut: Number($('cut').value) >= 4 ? 20 : Number($('cut').value),
-      peaks: !relief && mode !== 'live' && mode !== 'recent' && $('statistic').value === 'peaks',
+      peaks: !relief && mode !== 'live' && $('statistic').value === 'peaks',
       threshold,
     });
     text('clock', format(focus));
     text(
       'map-legend',
-      $('color-mode').value === 'frequency'
-        ? fluid
-          ? 'Ripples = waveform · hatching = unavailable region · faint droplets = history'
-          : relief
-            ? 'Relief = signed waveform · ' +
-              ($('color-off').checked ? 'color off' : 'color = strongest band')
-            : ($('color-off').checked ? 'Color off' : 'Color = strongest band') +
-              ' · white ring = sharp candidate'
-        : $('color-mode').value === 'change'
-          ? 'Baseline Δ · blue = less · orange = more · full color = 12 dB'
-          : 'Changed time · dark 0% → orange 100% · ≥6 dB',
+      constellation
+        ? 'Stars = channels · hollow = unavailable · links = spatial guides, not connectivity'
+        : $('color-mode').value === 'frequency'
+          ? fluid
+            ? 'Ripples = waveform · hatching = unavailable region · faint droplets = history'
+            : relief
+              ? 'Relief = signed waveform · ' +
+                ($('color-off').checked ? 'color off' : 'color = strongest band')
+              : ($('color-off').checked ? 'Color off' : 'Color = strongest band') +
+                ' · white ring = sharp candidate'
+          : $('color-mode').value === 'change'
+            ? 'Baseline Δ · blue = less · orange = more · full color = 12 dB'
+            : 'Changed time · dark 0% → orange 100% · ≥6 dB',
     );
     text(
       'baseline-status',
@@ -500,7 +502,7 @@ export function mountPatient(
     );
     text(
       'view-label',
-      `${source === 'demo' ? 'SYNTHETIC · ' : ''}${mode === 'recent' ? `${frames.length} retained windows · older → newer` : mode === 'side' ? (relief ? 'Representative 2-second windows' : '') : mode === 'history' ? 'Center = recent · outward = older' + (relief ? ' · example windows' : '') : fluid ? 'Ripple distance = recent time · ' + $('scale').value + ' µV ruler' : relief ? 'Two-second waveform · ' + $('scale').value + ' µV ruler' : frequencyMap ? 'Two-second spectrum · ' + $('scale').value + ' µV ruler' : 'Two-second spectrum · fixed baseline'}${f.mixed ? ' · mixed settings' : ''}`,
+      `${source === 'demo' ? 'SYNTHETIC · ' : ''}${constellation ? 'Inner = selected interval · outward = older · ' + (frequencyMap ? ($('color-off').checked ? 'color off' : 'color = strongest band') + (threshold >= 0 ? '' : ' · brightness = amplitude') : $('color-mode').value === 'change' ? 'blue = less · orange = more vs baseline' : 'brightness = changed-time fraction') : mode === 'side' ? (relief ? 'Representative 2-second windows' : '') : mode === 'history' ? 'Center = recent · outward = older' + (relief ? ' · example windows' : '') : fluid ? 'Ripple distance = recent time · ' + $('scale').value + ' µV ruler' : relief ? 'Two-second waveform · ' + $('scale').value + ' µV ruler' : frequencyMap ? 'Two-second spectrum · ' + $('scale').value + ' µV ruler' : 'Two-second spectrum · fixed baseline'}${f.mixed ? ' · mixed settings' : ''}`,
     );
     const old = $('channel').value,
       names = f.channels.map((c) => c.name);
@@ -1472,15 +1474,12 @@ export function mountPatient(
     (b) =>
       (b.onclick = () => {
         mode = b.dataset.view;
+        $('surface-mode').hidden = mode === 'constellation';
         historyDetail = null;
         root
           .querySelectorAll('[data-view]')
           .forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-        if (mode === 'recent') {
-          if ($('surface-mode').value === 'spectrum') $('surface-mode').value = 'fluid';
-          $('color-mode').value = 'frequency';
-        }
-        if (mode === 'side' || mode === 'recent') ensureField().side();
+        if (mode === 'side') ensureField().side();
         else ensureField().home();
         render();
       }),
@@ -1515,11 +1514,7 @@ export function mountPatient(
   };
   $('stop').onclick = stop;
   $('guide').onclick = () => $('help').showModal();
-  $('color-mode').onchange = () => {
-    if (mode === 'recent' && $('color-mode').value !== 'frequency')
-      root.querySelector('[data-view="side"]').click();
-    else render();
-  };
+  $('color-mode').onchange = render;
   $('surface-mode').onchange = render;
   $('pattern-kind').onchange = render;
   $('color-off').onchange = render;
@@ -1551,7 +1546,7 @@ export function mountPatient(
     if (!paused) {
       frozenFrame = visibleFrame();
       frozenFrames = history.overview(16);
-      frozenRecent = recentWaveforms(historyDetail || history.bins(), Number($('time').value));
+      frozenConstellation = constellationFrames(history.bins(), frozenFrame);
       frozenEnd = history.end;
     }
     paused = !paused;

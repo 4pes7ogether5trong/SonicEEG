@@ -40,8 +40,7 @@ export function canBlendCloud(previous, frames, o, reduced = false) {
   return !!(
     previous &&
     frames.length &&
-    o.mode === 'history' &&
-    o.fluid &&
+    ((o.mode === 'history' && o.fluid) || o.mode === 'constellation') &&
     o.animate &&
     !o.frozen &&
     !reduced &&

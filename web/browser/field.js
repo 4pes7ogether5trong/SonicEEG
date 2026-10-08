@@ -18,6 +18,8 @@ import { WaterRenderer } from './water-renderer.js';
 import { missingWaterSources, missingWaterAt, waterChannels, waterAt } from './water-math.js';
 import { regionalArchitectures } from './fluid-episodes.js';
 import { canBlendCloud, cloudContext, cloudEase, CLOUD_TRANSITION_MS } from './cloud-motion.js';
+import { constellationData, drawConstellation } from './constellation.js';
+import { ConstellationRenderer } from './constellation-renderer.js';
 
 const vertex =
   'attribute float intensity; attribute float coverage; attribute float affected; varying float vI; varying float vC; varying float vA; varying vec3 vColor; varying vec3 vLocal; void main(){vI=intensity;vC=coverage;vA=affected;vColor=color;vLocal=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
@@ -80,6 +82,7 @@ export class FluidField {
       this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       this.scene = new THREE.Scene();
       this.water = new WaterRenderer(this.scene);
+      this.constellation = new ConstellationRenderer(this.scene, Math.min(devicePixelRatio, 2));
       this.scene.add(new THREE.AmbientLight(0xffffff, 0.65));
       const light = new THREE.DirectionalLight(0xffffff, 2.4);
       light.position.set(-3, 5, 4);
@@ -112,6 +115,13 @@ export class FluidField {
           ),
           this.camera,
         );
+        if (this.options.mode === 'constellation') {
+          const hit = this.raycaster
+            .intersectObject(this.constellation.points)
+            .find((h) => this.constellation.states[h.index]?.current);
+          if (hit) this.onSelect(this.constellation.states[hit.index].name);
+          return;
+        }
         const droplet = this.raycaster.intersectObjects(
           this.water.drops.filter((m) => m.visible),
         )[0];
@@ -141,6 +151,7 @@ export class FluidField {
         if (document.hidden || this.visible === false) return;
         this.settle(dt);
         this.water.animate(now);
+        this.constellation.animate(now);
         this.fly.enabled ? this.fly.update(dt) : this.controls.update();
         this.renderer.render(this.scene, this.camera);
       });
@@ -247,7 +258,7 @@ export class FluidField {
     return {
       u,
       offset: o.mode === 'side' ? sidePosition(mid, total, focus, o.lens) : 0,
-      scale: o.mode === 'side' ? (o.recent ? 0.53 : 0.32) : 1,
+      scale: o.mode === 'side' ? 0.32 : 1,
       radial: o.mode === 'history' ? 1 + u * 2 : 1,
     };
   }
@@ -436,12 +447,29 @@ export class FluidField {
   update(frames, options = {}) {
     this.options = { ...this.options, ...options };
     this.frames = frames || [];
+    this.canvas.setAttribute(
+      'aria-label',
+      this.options.mode === 'constellation'
+        ? 'EEG constellation. Stars are channels; outward trails are older measurements. Lines are spatial guides, not connectivity. Drag to rotate, scroll to zoom, select a bright star to inspect its channel.'
+        : 'EEG scalp field. Drag to rotate, scroll to zoom. Surface markers show displayed channels; white rings mark sharp candidates.',
+    );
     if (this.software) {
       this.updateSoftware();
       return;
     }
     const o = this.options,
       shown = o.mode === 'live' ? this.frames.slice(-1) : this.frames;
+    if (o.mode === 'constellation') {
+      for (const mesh of [...this.meshes, ...this.reliefs, ...this.glyphs]) mesh.visible = false;
+      this.water.hide();
+      this.constellation.update(constellationData(shown, o), shown, {
+        ...o,
+        reducedMotion: this.reduceMotion,
+      });
+      this.makeReference();
+      return;
+    }
+    this.constellation.hide();
     if (o.fluid) {
       for (const mesh of [...this.meshes, ...this.reliefs, ...this.glyphs]) mesh.visible = false;
       this.water.update(shown, { ...o, animate: o.animate && !this.reduceMotion }, (f) =>
@@ -543,10 +571,7 @@ export class FluidField {
   }
   makeReference() {
     const o = this.options,
-      key =
-        o.mode === 'side'
-          ? [o.mode, o.total, o.focus, o.lens, o.rangeStart, o.recent].join('|')
-          : o.mode;
+      key = o.mode === 'side' ? [o.mode, o.total, o.focus, o.lens, o.rangeStart].join('|') : o.mode;
     if (this.referenceKey === key) return;
     this.referenceKey = key;
     for (const child of [...this.reference.children]) {
@@ -569,10 +594,11 @@ export class FluidField {
           [t.x, -0.72, 0],
         ]);
         if (i === 0 || i === 4)
-          this.label(
-            (o.recent ? '' : i === 0 ? 'Start ' : 'Present ') + fieldTime(t.time + start),
-            [t.x, -0.95, 0],
-          );
+          this.label((i === 0 ? 'Start ' : 'Present ') + fieldTime(t.time + start), [
+            t.x,
+            -0.95,
+            0,
+          ]);
       }
       const x = sidePosition(o.focus - start, span, o.focus - start, o.lens);
       this.referenceLine(
@@ -615,7 +641,12 @@ export class FluidField {
         const hit = (this.softwareDrops || []).find(
           (d) => Math.hypot(x - d.x, y - d.y) <= d.radius + 5,
         );
-        if (hit) this.onEpisode(hit.episode);
+        if (this.options.mode === 'constellation') {
+          const star = (this.softwareStars || []).find(
+            (p) => Math.hypot(x - p.x, y - p.y) <= p.radius,
+          );
+          if (star) this.onSelect(star.name);
+        } else if (hit) this.onEpisode(hit.episode);
       }
       down = null;
     });
@@ -691,6 +722,38 @@ export class FluidField {
     ctx.fillStyle = '#060c14';
     ctx.fillRect(0, 0, w, h);
     this.softwareDrops = [];
+    this.softwareStars = [];
+    if (o.mode === 'constellation') {
+      const project = (v) => {
+        const [x, y, z] = v;
+        const xx = x * Math.cos(this.yaw) + z * Math.sin(this.yaw);
+        const zz = -x * Math.sin(this.yaw) + z * Math.cos(this.yaw);
+        const yy = y * Math.cos(this.pitch) - zz * Math.sin(this.pitch);
+        const depth = y * Math.sin(this.pitch) + zz * Math.cos(this.pitch);
+        const k = Math.min(w / 6, h / 4.8) * this.zoom;
+        return [w / 2 + xx * k, h * 0.48 - yy * k, depth];
+      };
+      this.softwareStars = drawConstellation(
+        ctx,
+        constellationData(this.frames, o),
+        project,
+        Math.min(devicePixelRatio || 1, 2),
+        o.selected,
+      );
+      ctx.font = 13 * Math.min(devicePixelRatio || 1, 2) + 'px sans-serif';
+      ctx.fillStyle = '#93a9bf';
+      ctx.textAlign = 'center';
+      for (const [label, p] of [
+        ['L', [-1.65, 0.1, 0]],
+        ['R', [1.65, 0.1, 0]],
+        ['Front', [0, 0.1, -1.65]],
+        ['Back', [0, 0.1, 1.65]],
+      ]) {
+        const point = project(p);
+        ctx.fillText(label, point[0], point[1]);
+      }
+      return;
+    }
     const gridKey = o.fluid ? (o.mode === 'live' ? 'fluid-live' : 'fluid-history') : 'spectrum';
     if (!this.softwareGrids.has(gridKey)) {
       const g = o.fluid
@@ -999,11 +1062,7 @@ export class FluidField {
       sideTicks(span, o.focus - start, o.lens).forEach((t, i) => {
         line([t.x, -0.6, 0], [t.x, -0.72, 0], '#829aaa');
         if (i === 0 || i === 4)
-          label((o.recent ? '' : i === 0 ? 'Start ' : 'Present ') + fieldTime(t.time + start), [
-            t.x,
-            -0.95,
-            0,
-          ]);
+          label((i === 0 ? 'Start ' : 'Present ') + fieldTime(t.time + start), [t.x, -0.95, 0]);
       });
       const x = sidePosition(o.focus - start, span, o.focus - start, o.lens);
       line([x, -0.56, 0], [x, -0.77, 0], '#ffffff');
