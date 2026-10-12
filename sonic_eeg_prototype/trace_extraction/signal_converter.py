@@ -2,7 +2,10 @@ from typing import Tuple
 
 import numpy as np
 
-from utils.config import AppConfig
+try:
+    from sonic_eeg_prototype.utils.config import AppConfig
+except ModuleNotFoundError:
+    from utils.config import AppConfig
 
 
 def trace_to_signal(trace: np.ndarray, config: AppConfig) -> np.ndarray:

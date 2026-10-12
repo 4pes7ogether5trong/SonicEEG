@@ -8,7 +8,10 @@ try:
 except Exception:  # pragma: no cover
     cv2 = None
 
-from utils.config import AppConfig
+try:
+    from sonic_eeg_prototype.utils.config import AppConfig
+except ModuleNotFoundError:
+    from utils.config import AppConfig
 
 
 def _edge_detect_np(gray: np.ndarray, threshold: int) -> np.ndarray:

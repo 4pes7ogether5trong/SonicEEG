@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <meta
+      name="description"
+      content="Four patient EEG sonification with local window capture and a fluid 3D history."
+    />
+    <title>SonicEEG · Ambient voices</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="monitor-header">
+      <div class="identity">
+        <span class="orbmark" aria-hidden="true"></span>
+        <div><b>SonicEEG</b></div>
+      </div>
+      <div class="actions">
+        <button id="audio" class="primary" aria-pressed="false">Enable sound</button
+        ><button id="layout" aria-pressed="false">4 patients</button
+        ><button id="demo-all">Explore synthetic EEG</button
+        ><button id="speaker-test">Test speaker</button>
+        <details class="toolbar-more">
+          <summary>Practice</summary>
+          <div class="actions">
+            <button id="demo-history">Build full demo history</button
+            ><button id="demo-guided">Original sound demo</button
+            ><button id="exercise-open">Listening exercise</button>
+          </div>
+        </details>
+        <button id="stop-all">Stop all</button>
+      </div>
+    </header>
+    <section class="mixer" aria-label="Four patient audio mixer">
+      <div id="patients" class="patient-cards"></div>
+      <div class="mixer-controls">
+        <label
+          >Master volume
+          <input id="master-volume" type="range" min="0" max="100" value="35" /><output
+            id="master-value"
+            >35%</output
+          ></label
+        >
+        <details class="sound-options">
+          <summary>Sound options</summary>
+          <div class="mixer-controls">
+            <label
+              >Spatial sound
+              <select id="audio-spatial">
+                <option value="maximum">Focal maximum</option>
+                <option value="mean">Mean observed power</option>
+              </select></label
+            >
+            <label
+              >Audible bands
+              <select id="audio-band">
+                <option value="-1">All five bands</option>
+                <option value="0">Delta · C</option>
+                <option value="1">Theta · D</option>
+                <option value="2">Alpha · E</option>
+                <option value="3">Beta · G</option>
+                <option value="4">Gamma · A</option>
+              </select></label
+            >
+            <label><input id="visuals" type="checkbox" checked />3D view</label>
+            <label><input id="ambient" type="checkbox" checked />Persistence emphasis</label>
+          </div>
+        </details>
+        <span id="audio-status" role="status">Sound off</span>
+      </div>
+      <p id="monitor-message" role="status"></p>
+    </section>
+    <section id="exercise" hidden aria-label="Synthetic listening exercise">
+      <div class="spread">
+        <h2>Recognize the patient by sound</h2>
+        <button id="exercise-close">Leave exercise</button>
+      </div>
+      <p>
+        Learn the four voices first. Then listen for brief sharp accents or a growing change in
+        texture; select every patient you hear change. Eight 30-second synthetic clips include
+        isolated, repeating and simultaneous patterns. This is a feasibility exercise, not a
+        diagnostic test.
+      </p>
+      <div class="actions">
+        <button id="sound-check">1 · Hear A → B → C → D</button
+        ><span id="sound-check-state" role="status">Reference voices, not EEG data.</span>
+      </div>
+      <label class="sound-confirm"
+        ><input id="sound-confirmed" type="checkbox" />I can comfortably hear the reference
+        voices.</label
+      >
+      <div class="actions">
+        <button id="trial-start" class="primary" disabled>Start trial 1</button
+        ><span id="trial-state" role="status"
+          >Enable sound and set a comfortable volume first.</span
+        >
+      </div>
+      <fieldset id="trial-answers" disabled>
+        <legend>Which patients changed?</legend>
+        <label><input type="checkbox" value="0" />A</label
+        ><label><input type="checkbox" value="1" />B</label
+        ><label><input type="checkbox" value="2" />C</label
+        ><label><input type="checkbox" value="3" />D</label
+        ><button id="trial-answer">Submit answer</button>
+      </fieldset>
+      <p id="trial-result" role="status"></p>
+      <button id="trial-unheard" disabled>I could not hear the clip — retry</button>
+      <ol id="trial-results"></ol>
+      <button id="trial-export" disabled>Export exercise results</button>
+      <p class="muted">
+        Gain and master volume are preserved. A two-note descending cue means data is unavailable;
+        it is not an EEG event.
+      </p>
+    </section>
+    <div id="panels"></div>
+    <footer>
+      <span>Attention companion · not a diagnostic tool</span
+      ><span>Local image processing · no screenshots or patient headers uploaded</span>
+    </footer>
+    <template id="patient-template">
+      <header>
+        <b data-patient-heading>Patient A</b>
+        <span data-id="source-state">No recording loaded</span>
+        <div class="actions">
+          <button data-id="capture" class="primary">Capture EEG window</button
+          ><button data-id="demo">Synthetic example</button
+          ><button data-id="stop" hidden>Stop capture</button
+          ><button data-id="panel-details" aria-expanded="false">Controls</button
+          ><button data-id="guide">Guide</button>
+        </div>
+      </header>
+      <main>
+        <section class="field-workspace" aria-label="EEG visualization">
+          <div class="viewbar">
+            <div class="segmented" aria-label="View">
+              <button data-view="live" aria-pressed="true">Live field</button
+              ><button data-view="recent" aria-pressed="false">Recent stack</button
+              ><button data-view="history" aria-pressed="false">Whole history</button
+              ><button data-view="side" aria-pressed="false">Side profile</button>
+            </div>
+            <select data-id="color-mode" aria-label="Field color mapping">
+              <option value="frequency">Frequency</option>
+              <option value="change">Baseline change</option>
+              <option value="prevalence">Change prevalence</option>
+            </select>
+            <select data-id="surface-mode" aria-label="Surface representation">
+              <option value="fluid">Fluid dome</option>
+              <option value="relief">Waveform relief</option>
+              <option value="spectrum">Spectral field</option>
+            </select>
+            <label><input data-id="color-off" type="checkbox" />Color off</label>
+            <span data-id="renderer-state"></span>
+          </div>
+          <div data-id="stage">
+            <div data-id="empty">
+              <h1>Capture a patient window.</h1>
+              <p>Select Capture EEG window to begin.</p>
+            </div>
+            <div class="orientation" data-id="map-legend">
+              Color = strongest band · white ring = sharp candidate
+            </div>
+            <div data-id="view-label">Live field</div>
+            <div data-id="episode-info" class="episode-info" hidden></div>
+          </div>
+          <div class="navigation">
+            <button data-id="home">Home view</button
+            ><label
+              ><input data-id="fly" type="checkbox" />Enter field
+              <span class="muted">WASD + drag</span></label
+            ><label
+              >Lens <input data-id="fov" type="range" min="20" max="100" value="48" /><output
+                data-id="fov-value"
+                >48°</output
+              ></label
+            ><label
+              >Section <input data-id="cut" type="range" min="-3" max="4" value="4" step=".05"
+            /></label>
+          </div>
+          <div class="time-control">
+            <div class="spread">
+              <label for="time">Capture time <output data-id="clock">0:00</output></label
+              ><label><input data-id="follow" type="checkbox" checked />Follow live</label>
+            </div>
+            <input data-id="time" type="range" min="0" max="1" value="0" step=".1" />
+            <div class="spread muted">
+              <span>Start</span><span data-id="resolution">No history yet</span
+              ><span data-id="elapsed">0:00</span>
+            </div>
+          </div>
+          <div class="demo-events" data-id="demo-events" hidden>
+            <span>Programmed seizure intervals · synthetic</span>
+            <div
+              class="demo-event-track"
+              data-id="demo-event-track"
+              aria-label="Programmed synthetic seizure intervals"
+            ></div>
+          </div>
+          <div class="band-controls" data-id="bands" aria-label="Frequency layers">
+            <button data-band="-1" aria-pressed="true">All layers</button>
+          </div>
+        </section>
+        <aside>
+          <details>
+            <summary>Field controls</summary>
+            <label
+              >Droplets<select data-id="pattern-kind">
+                <option value="all">All patterns</option>
+                <option value="sharp">Sharp shapes</option>
+                <option value="periodic">Periodic repetition</option>
+                <option value="rhythmic">Rhythmic activity</option>
+                <option value="none">Hide droplets</option>
+              </select></label
+            >
+            <label
+              >Channel or derivation<select data-id="channel">
+                <option value="">All observed channels</option>
+              </select></label
+            >
+            <div data-id="channel-metrics" class="readout">No measurements</div>
+            <div data-id="coverage" class="muted"></div>
+            <div data-id="baseline-status" class="muted">
+              Pin baseline to compare future intervals.
+            </div>
+            <div data-id="baseline-metrics" class="readout"></div>
+            <label
+              >Amplitude ruler <output data-id="scale-value">80 µV</output
+              ><input data-id="scale" type="range" min="20" max="200" value="80" step="5"
+            /></label>
+            <label
+              >Time expansion<input
+                data-id="time-lens"
+                type="range"
+                min="0"
+                max="1"
+                value=".5"
+                step=".02"
+            /></label>
+            <label
+              >History statistic<select data-id="statistic">
+                <option value="typical">Mean band power</option>
+                <option value="peaks" selected>Brief peaks retained</option>
+                <option value="prevalence">Time above amplitude threshold</option>
+              </select></label
+            >
+            <label
+              >Band RMS threshold<select data-id="occupancy-threshold" disabled>
+                <option value="0">5 µV</option>
+                <option value="1">10 µV</option>
+                <option value="2" selected>20 µV</option>
+                <option value="3">40 µV</option>
+                <option value="4">80 µV</option>
+                <option value="5">160 µV</option>
+                <option value="6">320 µV</option>
+              </select></label
+            >
+            <div class="actions">
+              <button data-id="pause" aria-pressed="false">Freeze view</button>
+            </div>
+          </details>
+          <section class="capture-feedback">
+            <h2>Capture</h2>
+            <details>
+              <summary>Source details</summary>
+              <div data-id="montage-name">Montage not confirmed</div>
+              <div data-id="filter-state" class="muted">Filters unknown</div>
+              <div data-id="settings-watch" class="muted">Automatic settings check inactive.</div>
+            </details>
+            <div data-id="capture-status" role="status">
+              Capture a window or select the synthetic example.
+            </div>
+            <button data-id="setup-again" hidden>Review capture setup</button>
+            <button data-id="filters-quick" hidden>Filters changed</button>
+            <details>
+              <summary>Channel availability</summary>
+              <ul data-id="availability"></ul>
+            </details>
+          </section>
+          <details>
+            <summary>Saved history</summary>
+            <label
+              ><input data-id="save-local" type="checkbox" />Keep quantitative history
+              locally</label
+            >
+            <p class="muted">
+              Saves measurements and settings in this browser, without screenshots or patient
+              headers. Subject to device storage limits.
+            </p>
+            <label
+              >Saved session<select data-id="sessions">
+                <option value="">Select a session</option>
+              </select></label
+            >
+            <div class="actions">
+              <button data-id="restore">Open</button
+              ><button data-id="erase">Delete selected</button>
+            </div>
+            <div data-id="storage-state" role="status"></div>
+          </details>
+        </aside>
+      </main>
+
+      <dialog data-id="setup">
+        <form method="dialog">
+          <button class="close" aria-label="Close capture setup">×</button>
+        </form>
+        <h2>Confirm what SonicEEG can see</h2>
+        <p>
+          Draw three regions. Keep the patient header and video outside the regions. The preview
+          stays on this device.
+        </p>
+        <div class="actions">
+          <button data-roi="plot" aria-pressed="true">1 · Waveform area</button
+          ><button data-roi="labels" aria-pressed="false">2 · Channel labels</button
+          ><button data-roi="settings" aria-pressed="false">3 · Display settings</button
+          ><button data-id="recognize">Read labels and settings</button>
+        </div>
+        <canvas
+          data-id="setup-preview"
+          aria-label="Captured window preview. Drag to select the waveform, channel-label, and settings regions."
+        ></canvas>
+        <div data-id="setup-status" role="status">
+          Select the waveform area, including all desired traces but excluding channel labels.
+        </div>
+        <div class="setup-grid">
+          <label
+            >Derivations, one per row<textarea
+              data-id="labels"
+              rows="8"
+              spellcheck="false"
+              placeholder="FP1-F7&#10;F7-T7&#10;T7-P7&#10;P7-O1"
+            ></textarea>
+          </label>
+          <div class="setup-fields">
+            <label
+              >Seconds across waveform region<input
+                data-id="seconds"
+                type="number"
+                min=".2"
+                max="120"
+                step=".1"
+                value="10" /></label
+            ><label
+              >Voltage per vertical pixel (µV/px)<input
+                data-id="uv"
+                type="number"
+                min=".001"
+                max="100"
+                step=".01"
+                value="1"
+            /></label>
+            <p class="muted">
+              Use a visible voltage calibration bar: µV ÷ its height in captured pixels. A printed
+              µV/mm setting alone does not establish µV/px.
+            </p>
+            <label
+              >Calibration bar amplitude (µV)<input
+                data-id="cal-uv"
+                type="number"
+                min="1"
+                max="1000"
+                value="50" /></label
+            ><button data-id="calibrate">Measure bar: click its two ends</button
+            ><label
+              >Display progression<select data-id="progression">
+                <option value="scroll">Continuous scrolling</option>
+                <option value="sweep">Sweep with colored vertical cursor</option>
+              </select></label
+            ><label
+              >Polarity<select data-id="polarity">
+                <option value="up">Negative up</option>
+                <option value="down">Negative down</option>
+              </select></label
+            >
+          </div>
+          <div class="setup-fields">
+            <label
+              >High-pass cutoff (Hz)<input
+                data-id="hp"
+                type="number"
+                min="0"
+                max="100"
+                step=".1"
+                placeholder="Unknown" /></label
+            ><label
+              >Low-pass cutoff (Hz)<input
+                data-id="lp"
+                type="number"
+                min="1"
+                max="1000"
+                step="1"
+                placeholder="Unknown" /></label
+            ><label
+              >Notch<select data-id="notch">
+                <option value="unknown">Unknown</option>
+                <option value="off">Off</option>
+                <option value="50">50 Hz</option>
+                <option value="60">60 Hz</option>
+              </select></label
+            ><label
+              >Row baseline offset (captured pixels)<input
+                data-id="row-offset"
+                type="number"
+                value="0"
+                min="-100"
+                max="100" /></label
+            ><button data-id="check-rows">Show extraction alignment</button
+            ><label
+              ><input data-id="confirmed" type="checkbox" />I verified the rows, polarity, time and
+              voltage scales.</label
+            >
+            <p class="muted">
+              Uncertain recognition is editable. Layout or detected setting changes stop
+              reconstruction until reviewed.
+            </p>
+          </div>
+        </div>
+        <div class="actions">
+          <button data-id="begin" class="primary">Start capture + sound</button
+          ><button data-id="cancel-setup">Cancel capture</button>
+        </div>
+      </dialog>
+      <dialog data-id="quick-filters" aria-label="Confirm filter-only change">
+        <h2>Confirm this patient's filters</h2>
+        <p>Capture is paused. History is retained. Other patients continue.</p>
+        <label
+          >High-pass / low-frequency filter (Hz)<input
+            data-id="quick-hp"
+            type="number"
+            min="0"
+            step="any"
+            placeholder="Unknown"
+        /></label>
+        <label
+          >Low-pass / high-frequency filter (Hz)<input
+            data-id="quick-lp"
+            type="number"
+            min="0"
+            step="any"
+            placeholder="Unknown"
+        /></label>
+        <label
+          >Notch<select data-id="quick-notch">
+            <option value="unknown">Unknown</option>
+            <option value="off">Off</option>
+            <option value="50">50 Hz</option>
+            <option value="60">60 Hz</option>
+          </select></label
+        >
+        <label
+          ><input data-id="quick-confirm" type="checkbox" />I verified the filters. Timebase,
+          sensitivity, montage, polarity, window size and row positions are unchanged.</label
+        >
+        <p data-id="quick-status" role="status"></p>
+        <div class="actions">
+          <button data-id="quick-apply" class="primary">Confirm and resume</button
+          ><button data-id="quick-full">Review full setup</button
+          ><button data-id="quick-cancel">Keep paused</button>
+        </div>
+      </dialog>
+      <dialog data-id="help">
+        <form method="dialog">
+          <button class="close" aria-label="Close guide">×</button>
+        </form>
+        <h2>Sound and a field with memory</h2>
+        <p>
+          The surface uses the strongest displayed band at each location. Brightness follows the
+          shared amplitude scale. Channel markers sit on the surface. White rings mark measured
+          sharp candidates, including artifacts; hollow gray markers indicate unavailable channels.
+          History preserves brief peaks by default. Select Mean band power for typical activity. The
+          side ruler runs from Start to Present; its white tick marks the selected time. Lens
+          changes the spacing, not the timestamps.
+        </p>
+        <p>
+          Explore synthetic EEG plays a 12-minute sampler: A has repeated 12-second episodes of 3/s
+          generalized spike-wave; B has sustained evolving seizure activity after ten seconds of
+          reference background; C has N3-like slow-wave sleep; D is awake with eyes open and
+          occasional broad frontal blinks. These are scripted appearances, including a nonconvulsive
+          status scenario, without a clinical examination. Practice → Build full demo history opens
+          the complete sampler in the side view with playback stopped. Drag to rotate, scroll to
+          zoom, and use the timeline to inspect earlier scenes. These are designed signals, not
+          patient recordings.
+        </p>
+        <p>
+          Baseline change colors decreases blue and increases orange against a fixed two-second
+          reference. In All layers it shows the band with the largest absolute mean change; full
+          brightness is 12 dB. Change prevalence shows the fraction of compared valid time with at
+          least a 6 dB change in any selected band, from dark (0%) to orange (100%). Pin baseline
+          under the patient's Adjust menu while fresh data arrives. The sampler pins its own
+          reference at six seconds. Earlier intervals have no comparison; repinning or changing
+          recording settings creates a boundary. A 2 µV band-RMS floor stabilizes near-zero ratios.
+          These maps describe change, which can include sleep and artifact. There is no seizure
+          probability model. The synthetic interval strip shows the generator's programmed events,
+          not detected events.
+        </p>
+        <p>
+          Adjust each patient's octave (2–6), sound mode, threshold and volume independently.
+          Defaults are A C3–A3, B C4–A4, C C5–A5 and D C6–A6. Within each octave, delta, theta,
+          alpha, beta and gamma use C, D, E, G and A. Their loudness follows band RMS on a shared
+          voltage scale. Velvet, Hollow, Reed and Glass give the patients different harmonic
+          textures. Pitch identifies patient and band; it is not a direct frequency readout. Mono
+          phone speakers cannot convey left/right stereo location, and comfortable device levels
+          still need checking.
+        </p>
+        <p>
+          Continuous plays band activity above the chosen band-RMS threshold; 0 µV includes the
+          measured background. Changes only stays quiet until you pin a baseline and a band changes
+          beyond your dB threshold. Both increases and attenuation can sound. Lower thresholds
+          reveal smaller changes; Volume adjusts loudness separately. Thresholds also gate accents
+          and the held emphasis tone, so they cannot sustain a background hum inside the quiet
+          range. Sound fades smoothly as activity returns. The octave and thresholds stay set when
+          capture restarts; the baseline must be pinned again for a new source or recording context.
+          These settings last for this tab. This is a band-based rendition of EEG, not playback of
+          every waveform cycle. Changes with unchanged band power can remain quiet in Changes only.
+        </p>
+        <p>
+          Persistence emphasis increases more strongly after ten seconds of observed sustained
+          activity, without a sudden volume step. This is an attention landmark, not a seizure
+          threshold. It adds brief accents for measured sharp candidates and a bounded increase in
+          brightness and prominence when changes repeat or persist. A separate held E tone carries
+          emphasis, not band power. Emphasis releases gradually after the pattern ends. There is no
+          decorative beat, noise layer or artificial EEG rhythm. Turn emphasis off to hear the band
+          mapping alone.
+        </p>
+        <p>
+          These are experimental shape and repetition descriptors, not detection of periodic
+          discharges, spike-wave activity or seizures. Artifacts can also trigger emphasis.
+          Sharp-shape analysis requires at least 100 displayed samples per second; missing samples
+          make it unavailable. Filtering, reference and screen resolution can alter or hide shapes.
+          Use Filters changed for a filter-only adjustment; timebase, sensitivity or montage changes
+          require full setup. History is retained with a settings boundary, and incompatible
+          comparison baselines are cleared. Pin baseline uses the current two-second measured
+          spectrum as a fixed reference; select a clean interval in the source EEG first. It does
+          not diagnose normality. Source or recording-setting changes clear it.
+        </p>
+        <p>
+          The default uses the largest observed band power on each side to keep focal activity
+          audible. Mean power is also available. Stereo follows the first electrode of each
+          displayed derivation, not a cortical source. Focus lowers other patients by 12 dB; Mute
+          silences only its patient.
+        </p>
+        <p>
+          The mixer always follows newly acquired data. Changing visual patient, band, scale or
+          history time does not change sound. Freeze view freezes only the image. Sound fades if no
+          new valid interval arrives for 2.5 seconds. A silent recording, a capture gap and a muted
+          patient have separate status labels. A descending two-note cue means data became
+          unavailable, not an EEG event. It cannot sound if the browser audio system is suspended.
+          Identify plays a brief reference voice, not EEG activity, and bypasses patient gain/mute
+          while respecting master volume. Stop all cancels reference voices as well as the sources.
+        </p>
+        <p>
+          The guided demo is 84 seconds long: a quiet start, an isolated left transient in A,
+          sustained left activity in A, bilateral activity in B and C, and brief recurring then
+          sustained right activity in D. The known quiet interval is pinned automatically only for
+          synthetic data. Programmed labels are hidden during the listening exercise. The exercise
+          preserves your volume and octave choices and does not score an unheard or interrupted
+          clip. During the exercise, continuous sound at 0 µV temporarily replaces each patient's
+          mode and threshold; your settings resume when you close it. Audio gain has increased:
+          begin with low device volume, especially with headphones.
+        </p>
+        <p>
+          Use the same desktop browser tab for this prototype and keep it active. Browser capture or
+          timers may pause in a background or locked session. If that happens, stale audio fades.
+          Vendor compatibility and unattended continuous monitoring have not been established.
+        </p>
+        <p>
+          Select an EEG application window. Draw the waveform, label and settings regions, then
+          confirm the montage and scales. All image processing and OCR run on this device. No
+          account or cloud AI is needed by this application.
+        </p>
+        <p>
+          Fluid dome joins local waveform ripples into a continuous surface. Distance from each
+          displayed electrode encodes recent waveform time; spreading rings do not represent neural
+          propagation or recovered brain sources. Bipolar measurements contribute opposing lobes at
+          the two electrode positions. Signed samples deform the surface, and directional
+          reflections reveal their crests and troughs. Unsupported regions stay dim. Color follows
+          the strongest local frequency contribution; Color off lets you inspect shape alone.
+        </p>
+        <p>
+          Droplets emerge around regions containing sharp shapes, periodic repetition or rhythmic
+          activity. They brighten with observed persistence, then fade over several seconds to a
+          lasting ghost. Sharp droplets are taller, periodic droplets have ridged sides, and
+          rhythmic droplets are rounder. These features can overlap and can include normal rhythms
+          and artifacts. They are descriptors, not diagnoses. Tap a droplet to inspect its time and
+          region. Field controls lets you isolate each type or hide droplets. A long history groups
+          older ghosts by region and type, keeping their time extent and latest example.
+        </p>
+        <p>
+          Waveform relief remains available for comparing individual strips. It folds a two-second
+          waveform onto each displayed derivation. Peaks rise; negative deflections sink relative to
+          that window's mean. A bipolar strip runs from its first electrode to its second; a
+          referential patch runs front to back. Along each strip is time, not propagation through
+          the brain. The dark dome is an orientation guide. Updates arrive every half second without
+          blending different waveform cycles together. Color off reveals shape through lighting. The
+          amplitude ruler changes relief depth; extreme deflections are capped. Select one channel
+          to separate overlapping strips.
+        </p>
+        <p>
+          Recent stack shows up to six nonoverlapping retained windows, oldest at left. Whole
+          history and Side profile show representative windows selected for sharp candidates, then
+          amplitude; these are examples, not averages or a continuous waveform archive. Compressed
+          intervals can omit other shapes. The selected interval's example time appears beneath the
+          time slider. Choose Spectral field for power summaries or a baseline map. Band selection
+          colors relief; it does not filter its waveform. Older saved sessions may have no waveform
+          relief.
+        </p>
+        <p>
+          Whole history places older intervals outward. Side profile spreads them along an axis.
+          Drag to rotate, scroll to approach, or enter the field with WASD and drag. Lens changes
+          perspective; Time expansion opens time around your selection. Section removes an
+          obstructing portion.
+        </p>
+        <p>
+          Bright areas indicate amplitude, not abnormality. The prevalence statistic instead shows
+          the fraction of valid time represented by analysis windows at or above your band RMS
+          threshold. It describes the selected amplitude criterion, not seizure burden.
+          Interpolation illustrates montage measurements; it does not estimate cortical sources or
+          connectivity. Empty regions can mean unavailable measurements. Derived connections require
+          a valid graph path. Filter-affected frequency surfaces are hatched in the WebGL view.
+        </p>
+        <p>
+          Capture must be running while the source display advances. Hidden, clipped, overlapped or
+          filtered-out information cannot be recovered by zooming. This first extractor supports
+          separated rows and continuous scrolling or a clearly colored sweep cursor; vendor
+          recognition and clinical performance remain unvalidated. The original EEG application
+          remains the source for morphology and clinical interpretation.
+        </p>
+        <p>
+          Quantitative history compresses for the overview, preserving peaks, valid duration and
+          gaps. Optional local storage retains the original quantitative frames for detailed time
+          selection, including bounded waveform samples when available; it does not archive waveform
+          screenshots or the original recording. Browser storage can be cleared or exhausted.
+        </p>
+      </dialog>
+    </template>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

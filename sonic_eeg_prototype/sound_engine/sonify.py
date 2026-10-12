@@ -2,7 +2,10 @@ from typing import Dict, Tuple
 
 import numpy as np
 
-from utils.config import AppConfig
+try:
+    from sonic_eeg_prototype.utils.config import AppConfig
+except ModuleNotFoundError:
+    from utils.config import AppConfig
 
 
 def _sine_wave(freq: float, duration: float, sr: int) -> np.ndarray:

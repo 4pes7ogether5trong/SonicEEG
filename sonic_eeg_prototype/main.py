@@ -2,14 +2,24 @@ import argparse
 import time
 from pathlib import Path
 
-from utils.config import AppConfig
-from utils.logger import RunLogger
-from screenscraper.quadrant_splitter import split_quadrants
-from trace_extraction.waveform_detector import extract_waveform_trace
-from trace_extraction.signal_converter import trace_to_signal
-from sound_engine.frequency_analyzer import compute_band_powers
-from sound_engine.sonify import synthesize_audio_mix
-from utils.synthetic import generate_synthetic_screenshot
+try:
+    from sonic_eeg_prototype.utils.config import AppConfig
+    from sonic_eeg_prototype.utils.logger import RunLogger
+    from sonic_eeg_prototype.screenscraper.quadrant_splitter import split_quadrants
+    from sonic_eeg_prototype.trace_extraction.waveform_detector import extract_waveform_trace
+    from sonic_eeg_prototype.trace_extraction.signal_converter import trace_to_signal
+    from sonic_eeg_prototype.sound_engine.frequency_analyzer import compute_band_powers
+    from sonic_eeg_prototype.sound_engine.sonify import synthesize_audio_mix
+    from sonic_eeg_prototype.utils.synthetic import generate_synthetic_screenshot
+except ModuleNotFoundError:
+    from utils.config import AppConfig
+    from utils.logger import RunLogger
+    from screenscraper.quadrant_splitter import split_quadrants
+    from trace_extraction.waveform_detector import extract_waveform_trace
+    from trace_extraction.signal_converter import trace_to_signal
+    from sound_engine.frequency_analyzer import compute_band_powers
+    from sound_engine.sonify import synthesize_audio_mix
+    from utils.synthetic import generate_synthetic_screenshot
 
 
 def process_frame(image, config: AppConfig, run_logger: RunLogger, run_ts: str, step_idx: int):

@@ -1,29 +1,12 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="styles.css">
-    <title>EEG Sonification</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="0; url=eeg_visualizer_mvp/web/">
+  <title>SonicEEG Visualizer</title>
 </head>
 <body>
-
-<div id="eegDisplay">
-    <!-- Mock EEG Waveform using SVG -->
-    <svg id="eegWave" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-        <!-- Slow start and gradually increasing frequency towards the end -->
-        <path id="sineWave" d="M 0,50 Q 500,0 1000,50 Q 1500,100 2000,50 Q 2250,0 2500,50 Q 2625,0 2750,50 Q 2812,0 2875,50 T 3000 50 T 3050 50" stroke="black" fill="transparent"/>
-    </svg>
-    <div id="refreshBar"></div>
-    <div id="roiBox"></div>
-</div>
-
-<div>
-    <button id="startMonitoring">Start Monitoring</button>
-    <button id="stopMonitoring">Stop Monitoring</button>
-</div>
-
-<script src="scripts.js"></script>
-
+  <p><a href="eeg_visualizer_mvp/web/">Open the SonicEEG visualizer</a></p>
 </body>
 </html>

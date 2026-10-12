@@ -1,49 +1,74 @@
 # SonicEEG
-Sonification of EEG waveforms for cross-compatible multi-facility use
 
----
+SonicEEG explores EEG as a luminous, spatial field with memory and synchronized sound. The new browser application reconstructs **visible, calibrated screen traces** from a user-selected EEG application window, then renders measurements around schematic electrode positions. Technologists use a hosted page; they do not install Python, a browser extension, or a capture agent.
 
-# SonicEEG
+This is an implemented research prototype. Compatibility with Natus, Cadwell, Nihon Kohden and other vendor displays is **not yet established**. The extractor currently needs separated trace rows and a continuously scrolling display or a colored sweep cursor. It cannot access another application's hidden recordings or reverse display filtering.
 
-SonicEEG is a web-based application designed as a proof-of-concept to audibly represent EEG patterns. The project provides a simplistic representation where a mock EEG waveform is shown on a screen, and a refresh bar scans across it. The ROI behind the refresh bar detects the waveform's amplitude, modulating the sound pitch to match the waveform's frequency.
+## What is implemented
 
-## Features
+- **Living surface:** signed displacement, absolute spectral amplitude as light, five separately selectable frequency colors, rotation, zoom, perspective lens, cutaway and fly navigation. The main analysis view contains no waveform traces.
+- **Accumulating history:** older measurements expand outward or along a side profile. A temporal pyramid preserves the recording extent, weighted power, rare peaks, valid duration, gaps and amplitude prevalence.
+- **Prevalence:** choose a band RMS threshold and see the fraction of valid time represented by windows meeting it. This is an amplitude criterion, not an automatic abnormality or seizure label.
+- **Montage awareness:** local OCR proposes electrode pairs and row positions, including legacy T3/T4/T5/T6 aliases. Common longitudinal, transverse and referential templates suggest expected unseen derivations. Editable confirmation remains necessary.
+- **Hidden-channel provenance:** observed, algebraically derived, expected unseen and unavailable measurements remain distinct. A missing voltage difference is derived only from a connected, aligned path of observed differences.
+- **Capture calibration:** separate waveform/label/settings regions, two-click voltage-bar calibration, seconds per region, polarity, filters, row alignment preview, duplicate rejection and explicit capture gaps.
+- **Local processing:** image extraction and FFT in a Web Worker; bundled local OCR worker, WASM and English model; no application upload, analytics or cloud-AI integration.
+- **Four ambient patient voices:** independent capture, montage, calibration and history for slots A–D. Fixed C3–A3, C4–A4, C5–A5 and C6–A6 ranges share a C–D–E–G–A band palette, with Velvet, Hollow, Reed and Glass timbres, hemisphere stereo placement and a shared voltage scale.
+- **Bounded persistence emphasis:** measured sharp candidates create immediate accents; sustained or recent recurring changes gradually add prominence and spectral brightness, then release. A fixed operator-pinned reference can also highlight amplitude increases or attenuation. These are experimental descriptors, not automatic periodic-discharge, spike-wave or seizure diagnoses. No decorative beat or noise loop is added.
+- **Independent live audio:** each patient's gain, mute and focus controls operate separately. Visual patient/band selection, time review, freeze and disabling 3D never redirect live sound. Only fresh measurements refresh a voice; stale sound fades after 2.5 seconds. Focus lowers other patients by 12 dB without fully silencing them.
+- **Listening exercise:** an A→B→C→D sound check followed by eight 30-second synthetic trials with one, two and four active patients, including simultaneous changes. Patient gains and master volume are preserved. Unheard or interrupted clips can be retried without counting as missed selections. Reveal programmed targets and optionally export responses locally. This is not a validated clinical or psychometric test.
+- **Local history:** opt-in IndexedDB persistence and per-session deletion. Opening a saved session restores quantitative frames; the original EEG recording and screenshots are not archived.
+- **Guided synthetic example:** 84 seconds of quiet background, an isolated sharp transient, unilateral/bilateral repeating activity and spike-and-slow-wave-like complexes, including brief recurring and sustained patterns. Capture errors never switch to synthetic data.
+- **Dynamic visual journey:** choose **Explore synthetic EEG** for six scenes across 144 seconds, with traveling frequency changes, focal trains, bilateral rhythms, quiet/burst contrast and layered recovery. **Practice → Build full demo history** opens the whole journey in the side view without waiting for playback. See [synthetic journey](docs/synthetic-journey.md).
 
-- **Visual Representation**:
-  - A sine wave representation of EEG data.
-  - A moving refresh bar that simulates scanning the EEG waveform.
-  - An ROI that follows the refresh bar, detecting the waveform's amplitude.
-  
-- **Audio Representation**:
-  - Sound modulation based on the detected amplitude from the ROI.
-  - Dynamic change in pitch according to the frequency of the sinus rhythm.
-  - Control buttons to start, stop, and configure the base frequency for sound representation.
+## Build and run — developers / site administrators
 
-## Implementation
+Node 22 or newer is recommended for the development tooling. These commands run on the development or hosting machine, **not on each technologist's workstation**.
 
-The project uses:
-- **HTML**: To structure the content.
-- **CSS**: For styling and animations.
-- **JavaScript**: To control the dynamics of the waveform, ROI movement, and sound modulation.
+```bash
+npm ci
+node browser/build-assets.mjs
+npm run dev
+```
 
-## Usage
+Open the local URL printed by Vite. For a deployable static application:
 
-1. Open the web application.
-2. Click on "Start Monitoring" to begin the visual representation.
-3. Click on "Start Sound" to begin the audible representation. Adjust the base frequency as needed.
-4. The waveform will be scanned, and as the refresh bar passes over it, the sound's pitch will change to reflect the waveform's frequency.
+```bash
+npm run check
+npm test
+npm run build
+```
 
-## Troubleshooting
+Serve the contents of `dist/` on an approved HTTPS static host. Include its `ocr/` directory and license files. The build has a relative base path and can be hosted under a subdirectory. Opening source files directly with `file://` is unsupported. Screen capture requires a browser permission gesture and may be restricted by workstation/browser policy. Keep the source window and SonicEEG visible; browser throttling and a non-advancing capture produce gaps.
 
-If the GitHub Pages site isn't working:
-- Ensure the repository structure is correct.
-- Check that you're on the correct branch.
-- Validate the GitHub Pages settings in the repository.
-- Review any errors shown in the GitHub Pages section.
-- Consider caching issues or delays in GitHub Pages updates.
+The root `index.html` remains the **legacy** static demo entry. To serve the new interface, publish `dist/`, not the repository root. The CI workflow checks and packages the static build; it does not change a deployed website or GitHub Pages settings.
 
-## Contributions
+## First capture
 
-This project was developed with the guidance and input from (https://github.com/4pes7ogether5trong). All contributions, suggestions, or issues are welcome.
+1. Open the hosted page, select patient **A**, then choose **Capture EEG window**. Use the browser's native chooser to select that patient's EEG application window. Repeat setup independently for B, C and D as needed; each selection requires a browser permission gesture.
+2. Draw the waveform, channel-label and display-setting regions. Exclude headers and patient video from these processing regions. The initial full-window preview exists locally for this selection.
+3. Read the labels with local OCR, or enter the visible derivations in row order. Confirm any suggested glyph corrections. A printed montage name alone is insufficient.
+4. Confirm time scale, polarity, filters and voltage per captured pixel. Use a visible voltage bar; printed µV/mm alone cannot calibrate a resized screenshot.
+5. Use **Show extraction alignment** and verify the orange extracted points against the source. Adjust the crop/row offset, then confirm and begin.
+6. Enable sound at a comfortable volume. Identify plays the selected patient's brief octave reference tone. Explore Live surface, Whole history and Side profile, select a visual channel/band, change the history statistic, or scrub time while all live patients continue sounding. Enable local saving before capture if detailed older quantitative frames must remain available. Opening a saved session stops only its own slot; live patients in other slots continue.
 
----
+For an immediate demonstration, start with low device volume and choose **Play guided synthetic demo**; this explicitly starts audio. Output scaling has increased from the earlier version, so readjust to a comfortable level rather than leaving every control maximized. Switch patient cards and try **Freeze view** or turn off **3D view** while listening. The listening exercise is available when no real capture is attached; it never replaces an active real capture. Complete its reference sound check and comfortable-audibility confirmation before starting a trial. **Stop all** stops the four sources; **Mute all sound** leaves acquisition running. Mono phone speakers lose left/right stereo information; octave/timbre recognizability still requires a physical listening check.
+
+Labels and readable settings are rechecked about every five seconds. A discrepancy or lost alignment requests setup review and marks recent measurements uncertain. Settings that are not readable cannot be monitored automatically. An uncertain channel does not become a zero-amplitude channel.
+
+Use **Filters changed** for a filter-only adjustment; confirm that timebase, sensitivity, montage and geometry remain unchanged. Other changes require full setup review. Each confirmed change starts a separate context and clears incompatible baseline comparisons. Persistence emphasis remains modest initially and increases more strongly after ten seconds of observed sustained activity; it is not a seizure classifier. The guided synthetic examples and listening trials use this same mapping.
+
+## Design and evidence
+
+See [visual and measurement design](docs/browser-field-design.md) for the mapping equations, privacy boundary, temporal compression, limitations and corrections to the earlier concept. See [validation and comparison protocol](docs/browser-validation.md) for completed checks and the work still needed on actual EEG displays and physical devices.
+
+The browser tests use generated pixels and synthetic measurements. They establish specific reconstruction, calibration, OCR, storage and aggregation properties, not clinical performance. No browser interaction, graphics-device or vendor-display acceptance test has been completed for this revision.
+
+## Existing work
+
+- `browser/` — new install-free end-user application and numerical tests.
+- `eeg_visualizer_mvp/` — earlier modular Python/raw-file project, preserved as a separate path; [its documentation](eeg_visualizer_mvp/README.md).
+- `sonic_eeg_prototype/` — original offline screen/sonification experiment.
+- `docs/roblox_easter_game_design.md` — unrelated contributed document retained from repository history.
+
+Developed with [4pes7ogether5trong](https://github.com/4pes7ogether5trong). Suggestions and reproducible, synthetic or appropriately deidentified test fixtures are welcome. Do not submit patient screenshots or recordings to the public repository.

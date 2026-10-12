@@ -18,7 +18,10 @@ try:
 except Exception:  # pragma: no cover
     ImageGrab = None
 
-from utils.config import AppConfig
+try:  # Package import used by the modular visualizer.
+    from sonic_eeg_prototype.utils.config import AppConfig
+except ModuleNotFoundError:  # Preserve direct legacy script execution.
+    from utils.config import AppConfig
 
 
 def capture_fullscreen(config: AppConfig) -> Image.Image:
@@ -50,5 +53,8 @@ def capture_fullscreen(config: AppConfig) -> Image.Image:
     if Path(config.fallback_image_path).exists():
         return Image.open(config.fallback_image_path).convert('RGB')
 
-    # As a last resort, create a blank gray image
+    if not getattr(config, "allow_blank_fallback", True):
+        raise RuntimeError("screen capture failed; no capture backend is available")
+
+    # Legacy direct use preserves its former blank-image fallback.
     return Image.new('RGB', (config.demo_width, config.demo_height), color=(32, 32, 32))
