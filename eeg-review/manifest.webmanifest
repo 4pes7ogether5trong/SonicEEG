@@ -1,0 +1,17 @@
+{
+  "name": "EEG Review",
+  "short_name": "EEG Review",
+  "description": "Local EEG review with standard and custom montages",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eff4f3",
+  "theme_color": "#102d35",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

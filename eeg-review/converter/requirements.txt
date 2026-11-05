@@ -1,0 +1,7 @@
+# Versions used for the compatibility checks; Python 3.12 recommended.
+mne==1.13.2
+numpy==2.5.4
+scipy==1.18.1
+h5py==3.16.0
+pynwb==4.2.0
+pyxdf==1.18.0
