@@ -1,6 +1,7 @@
 'use strict';
 // Metadata-only unverified draft export gate. No PHI detection or clinical approval.
 const KINDS=new Set(['seizure','RDA','PD','BIRD','interictal_discharge','blink','vertex','k_complex','spindle','state_change']);
+const POINT_KINDS=new Set(['blink','vertex','k_complex','spindle','state_change','interictal_discharge']);
 const ISSUES=new Set(['missing_evidence','verify_onset_offset','verify_BIRD_criteria','review_seizure_overlap','review_overlapping_seizure_candidates','verify_pattern_classification','verify_state_or_artifact','low_confidence_seizure_candidate']);
 function fail(message){throw new TypeError(message)}
 function id(s){return typeof s==='string'&&s.length>0&&s.length<=128&&/^[A-Za-z0-9_.:-]+$/.test(s)}
@@ -15,7 +16,7 @@ function exportUnverifiedDraft(d){
   if(!f||!id(f.id)||seen.has(f.id))fail('invalid/duplicate finding id');seen.add(f.id);
   if(!KINDS.has(f.kind)||f.status!=='unverified_candidate'||f.interpretation!==null)fail('invalid finding status/kind');
   const t=f.intervalSeconds,c=f.confidenceRange;
-  if(!t||!finite(t.start)||!finite(t.end)||t.start<0||t.end<=t.start)fail('invalid interval');
+  if(!t||!finite(t.start)||!finite(t.end)||t.start<0||(t.end<t.start||(t.end===t.start&&!POINT_KINDS.has(f.kind))))fail('invalid interval');
   if(!c||!finite(c.min)||!finite(c.max)||c.min<0||c.max>1||c.min>c.max)fail('invalid confidence');
   if(!Number.isSafeInteger(f.occurrences)||f.occurrences<1)fail('invalid occurrences');
   if(!Array.isArray(f.evidenceIds)||!f.evidenceIds.every(id)||new Set(f.evidenceIds).size!==f.evidenceIds.length)fail('invalid evidence');
