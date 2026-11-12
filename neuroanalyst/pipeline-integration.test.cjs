@@ -1,0 +1,21 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {buildReviewDraft}=require('./review-draft.cjs');
+const {exportUnverifiedDraft}=require('./report-export-gate.cjs');
+const event=(kind,time,duration,confidence,evidenceId)=>({kind,time,duration,confidence,evidenceId});
+const run=(events,options={})=>JSON.parse(exportUnverifiedDraft(buildReviewDraft(events,{recordingId:'synthetic-integration',...options})));
+let passed=0;
+function test(name,fn){fn();passed++;console.log('ok',passed,name)}
+test('empty recording exports unsigned draft',()=>{const r=run([]);assert.equal(r.findings.length,0);assert.equal(r.signoff.approved,false)});
+test('routine point event retains zero duration',()=>{const r=run([event('blink',2,0,.99,'blink-1')]);assert.deepEqual(r.findings[0].intervalSeconds,{start:2,end:2})});
+test('isolated interictal point retains provenance',()=>{const r=run([event('interictal_discharge',2,0,.99,'spike-1')]);assert.deepEqual(r.findings[0].evidenceIds,['spike-1'])});
+test('low confidence seizure remains flagged and unsigned',()=>{const r=run([event('seizure',3,4,.3,'sz-1')]);assert(r.findings[0].reviewIssues.includes('low_confidence_seizure_candidate'));assert(r.findings[0].reviewIssues.includes('verify_onset_offset'))});
+test('interleaved PD events group with evidence',()=>{const r=run([event('PD',1,2,.95,'pd-1'),event('blink',2,0,.99,'blink-1'),event('PD',5,2,.96,'pd-2')]);const p=r.findings.filter(f=>f.kind==='PD');assert.equal(p.length,1);assert.equal(p[0].occurrences,2);assert.deepEqual(p[0].evidenceIds,['pd-1','pd-2'])});
+test('seizure interrupts grouping',()=>{const r=run([event('PD',1,2,.95,'pd-1'),event('seizure',3,2,.95,'sz-1'),event('PD',6,2,.95,'pd-2')]);assert.equal(r.findings.filter(f=>f.kind==='PD').length,2)});
+test('overlapping PD has explicit seizure evidence',()=>{const r=run([event('PD',1,8,.95,'pd-1'),event('seizure',4,2,.95,'sz-1')]);const p=r.findings.find(f=>f.kind==='PD');assert(p.reviewIssues.includes('review_seizure_overlap'));assert(p.overlappingSeizureEvidenceIds.includes('sz-1'))});
+test('overlapping seizures remain separate candidates',()=>{const r=run([event('seizure',1,6,.95,'sz-1'),event('seizure',4,4,.95,'sz-2')]);assert.equal(r.findings.length,2);assert(r.findings.every(f=>f.reviewIssues.includes('review_overlapping_seizure_candidates')))});
+test('missing evidence is explicitly flagged',()=>{const r=run([event('BIRD',1,3,.95,undefined)]);assert(r.findings[0].reviewIssues.includes('missing_evidence'))});
+test('zero duration seizure fails closed',()=>{assert.throws(()=>run([event('seizure',1,0,.95,'sz-1')]),TypeError)});
+test('zero duration RDA fails closed',()=>{assert.throws(()=>run([event('RDA',1,0,.95,'rda-1')]),TypeError)});
+test('stable output for same input',()=>{const events=[event('seizure',1,2,.9,'sz-1')];assert.equal(JSON.stringify(run(events)),JSON.stringify(run(events)))});
+console.log(`PASS ${passed} pipeline integration checks`);
