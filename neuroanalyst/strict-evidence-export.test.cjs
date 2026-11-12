@@ -17,7 +17,7 @@ const tests=[
  ['duplicate evidence',()=>assert.throws(()=>exportWithVerifiedEvidence(draft([]),[span('b1',1,1),span('b1',1,1)]),/duplicate/)],
  ['outside interval',()=>assert.throws(()=>exportWithVerifiedEvidence(draft([ev('blink',1,0,.99,'b1')]),[span('b1',2,2)]),/outside/)],
  ['valid seizure overlap',()=>{const d=draft([ev('PD',1,5,.96,'p1'),ev('seizure',3,2,.9,'s1')]);assert.equal(JSON.parse(exportWithVerifiedEvidence(d,[span('p1',1,6),span('s1',3,5)])).findings.length,2)}],
- ['overlap id must be seizure evidence',()=>{const d=draft([ev('PD',1,5,.96,'p1'),ev('seizure',3,2,.9,'s1')]);d.findings.find(f=>f.kind==='PD').overlappingSeizureEvidenceIds=['p1'];assert.throws(()=>exportWithVerifiedEvidence(d,[span('p1',1,6),span('s1',3,5)]),/seizure candidate/)}],
+ ['overlap id must be seizure evidence',()=>{const d=draft([ev('PD',1,5,.96,'p1'),ev('seizure',3,2,.9,'s1')]);d.findings=d.findings.map(f=>f.kind==='PD'?{...f,overlappingSeizureEvidenceIds:['p1']}:f);assert.throws(()=>exportWithVerifiedEvidence(d,[span('p1',1,6),span('s1',3,5)]),/seizure candidate/)}],
  ['deterministic',()=>{const d=draft([ev('blink',1,0,.99,'b1')]),m=[span('b1',1,1)];assert.equal(exportWithVerifiedEvidence(d,m),exportWithVerifiedEvidence(d,m))}],
  ['reject signoff',()=>{const d=draft([]);d.signoff.approved=true;assert.throws(()=>exportWithVerifiedEvidence(d,[]),/signoff/)}],
 ];
