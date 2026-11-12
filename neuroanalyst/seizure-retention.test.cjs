@@ -8,7 +8,7 @@ const cases=[
   ()=>{const g=groupEpisodesV2([e('PD',1,.2,'p'),e('seizure',3,.2,'s')]);assert.deepEqual(g.map(x=>x.kind),['seizure']);},
   ()=>{const g=groupEpisodesV2([e('seizure',1,.95,'s')]);assert.equal(g[0].belowThreshold,false);},
   ()=>{const g=groupEpisodesV2([e('seizure',1,0,'s0'),e('seizure',5,1,'s1')]);assert.equal(g.length,2);assert.deepEqual(g.map(x=>x.evidenceIds[0]),['s0','s1']);},
-  ()=>{const r=buildReviewDraft([e('seizure',10,.2,'s')]);assert.equal(r.findings.length,1);assert.equal(r.findings[0].confidenceRange.min,.2);assert.equal(r.findings[0].status,'unverified_candidate');assert.ok(r.findings[0].reviewIssues.includes('verify_onset_offset'));},
+  ()=>{const r=buildReviewDraft([e('seizure',10,.2,'s')]);assert.equal(r.findings.length,1);assert.equal(r.findings[0].confidenceRange.min,.2);assert.equal(r.findings[0].status,'unverified_candidate');assert.ok(r.findings[0].reviewIssues.includes('verify_onset_offset'));assert.ok(r.findings[0].reviewIssues.includes('low_confidence_seizure_candidate'));},
   ()=>{const r=buildReviewDraft([e('seizure',10,.2,'s')],{threshold:1});assert.equal(r.findings.length,1);},
   ()=>{const g=groupEpisodesV2([e('seizure',10,.2,'s'),e('PD',11,.95,'p')]);assert.equal(g.length,2);},
   ()=>assert.throws(()=>groupEpisodesV2([e('seizure',10,-.1,'s')]),/invalid event/)
