@@ -1,0 +1,14 @@
+'use strict';
+const {test}=require('node:test');const assert=require('node:assert/strict');
+const {evaluateOccupancyPair:e}=require('./prevalence-evaluation.cjs');
+const a={id:'P1',kind:'rhythmic-periodic',localization:'left temporal',state:'awake',coverage:'complete',usableSeconds:200,percent:20,category:'Frequent'};
+test('same reviewed population and denominator compares',()=>assert.deepEqual(e(a,{...a,percent:25,category:'Frequent'}),{comparable:true,coverage:'complete',usableSeconds:200,absolutePercentagePointError:5,categoryAgreement:true,modelCategory:'Frequent',referenceCategory:'Frequent'}));
+test('different reviewed denominators not compared',()=>assert.equal(e(a,{...a,usableSeconds:100}).reason,'different-reviewed-denominators'));
+test('mixed measurement methods not compared',()=>assert.equal(e(a,{...a,coverage:'observed-estimate'}).reason,'different-coverage-methods'));
+test('unquantified example not scored',()=>assert.equal(e({...a,coverage:'unquantified-example'},a).comparable,false));
+test('missing reviewer category not scored',()=>assert.equal(e(a,{...a,category:null}).reason,'missing-reviewer-category'));
+test('invalid percentages not scored',()=>assert.equal(e(a,{...a,percent:120}).reason,'invalid-occupancy'));
+test('localization mismatch rejected',()=>assert.throws(()=>e(a,{...a,localization:'right temporal'}),/mismatch/));
+test('state mismatch rejected',()=>assert.throws(()=>e(a,{...a,state:'asleep'}),/mismatch/));
+test('population id mismatch rejected',()=>assert.throws(()=>e(a,{...a,id:'P2'}),/mismatch/));
+test('sporadic cannot use occupancy evaluation',()=>assert.throws(()=>e(a,{...a,kind:'sporadic-epileptiform'}),/pair required/));
