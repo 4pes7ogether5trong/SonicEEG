@@ -18,4 +18,9 @@ test('unknown keys removed',()=>{let d=draft();d.secret='extra';d.findings[0].ex
 test('deterministic bytes',()=>{let d=draft();assert.equal(exportUnverifiedDraft(d),exportUnverifiedDraft(d))});
 test('low-confidence seizure flag accepted',()=>{let d=draft();d.findings[0].reviewIssues.push('low_confidence_seizure_candidate');assert.equal(JSON.parse(exportUnverifiedDraft(d)).findings[0].reviewIssues.length,2)});
 test('empty findings accepted',()=>{let d=draft();d.findings=[];d.summary={candidateCount:0,reviewRequiredCount:0};assert.equal(JSON.parse(exportUnverifiedDraft(d)).findings.length,0)});
+test('zero-duration routine point is preserved',()=>{let d=draft();let x=d.findings[0];x.kind='blink';x.intervalSeconds={start:2,end:2};x.reviewIssues=['verify_state_or_artifact'];assert.deepEqual(JSON.parse(exportUnverifiedDraft(d)).findings[0].intervalSeconds,{start:2,end:2})});
+test('zero-duration interictal point is preserved',()=>{let d=draft();let x=d.findings[0];x.kind='interictal_discharge';x.intervalSeconds={start:2,end:2};x.reviewIssues=['verify_pattern_classification'];assert.equal(JSON.parse(exportUnverifiedDraft(d)).findings[0].intervalSeconds.end,2)});
+test('zero-duration seizure rejected',()=>{let d=draft();d.findings[0].intervalSeconds.end=1;rejects(()=>exportUnverifiedDraft(d))});
+test('zero-duration RDA rejected',()=>{let d=draft();d.findings[0].kind='RDA';d.findings[0].intervalSeconds.end=1;rejects(()=>exportUnverifiedDraft(d))});
+test('zero-duration BIRD rejected',()=>{let d=draft();d.findings[0].kind='BIRD';d.findings[0].intervalSeconds.end=1;rejects(()=>exportUnverifiedDraft(d))});
 console.log(`PASS ${n} synthetic export gate tests`);
