@@ -24,3 +24,9 @@ Do not request user review until a reproducible passing integration suite and a 
 ## 2026-11-12 boundary milestone
 - Commits `2d2bbbb` and `53bfdeb`: corrected inclusive-endpoint false positives and added 8 synthetic integration cases. Separately executed 10 standalone predicate assertions locally (PASS); **the committed integration suite has not been executed**, so do not conflate those results.
 - Rationale: fewer spurious overlap warnings for adjacent events, while retaining flags for points at candidate onset. The grouping policy still needs review for long episodes that bridge seizure candidates.
+
+## 2026-11-12 evidence provenance milestone
+- Commits `64c6e018` and `57c5ab6`: added `evidence-index.cjs` and 13 synthetic regression cases. Local counterpart passed 13/13 on Node; exact committed CI run remains unverified.
+- `auditDraftEvidence(draft, spans)` checks recording-local ID resolution, duplicate evidence identifiers, invalid span geometry, cross-recording references, and candidate/evidence temporal intersection. It reports structured problems; **it is not wired into report export yet**. Existing export still permits flagged missing evidence, so provenance audit is an additional mandatory future gate, not a current guarantee.
+- Next P0: run committed suite, wire evidence index into a separate strict export path requiring a complete recording-local manifest, and test the full pipeline with evidence spans. Define whether overlap references must resolve to seizure candidates and verify they are linked to the same recording.
+- No deidentification guarantee follows from restricted identifier syntax; do not place PHI in identifiers.
