@@ -14,10 +14,12 @@ function groupEpisodesV2(events, {threshold=0.9,gapSeconds=10}={}) {
   // Seizure candidates reset grouping; do not consolidate across their onset.
   const active=new Map();
   for(const e of sorted){
-    if(e.confidence<threshold) continue;
+    // Retain all seizure candidates for human triage, including below the generic threshold.
+    // Low confidence is explicitly carried forward; this is not a positive diagnosis.
+    if(e.confidence<threshold && e.kind!=='seizure') continue;
     if(e.kind==='seizure') {
       active.clear();
-      result.push({kind:e.kind,start:e.time,end:e.end,count:1,confidenceMin:e.confidence,confidenceMax:e.confidence,evidenceIds:e.evidenceId?[e.evidenceId]:[],reviewRequired:true});
+      result.push({kind:e.kind,start:e.time,end:e.end,count:1,confidenceMin:e.confidence,confidenceMax:e.confidence,evidenceIds:e.evidenceId?[e.evidenceId]:[],reviewRequired:true,belowThreshold:e.confidence<threshold});
       continue;
     }
     if(ROUTINE.has(e.kind)) {
