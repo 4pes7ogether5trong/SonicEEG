@@ -14,6 +14,7 @@ function buildReviewDraft(events, options={}) {
     const issues=[];
     if(!g.evidenceIds.length) issues.push('missing_evidence');
     if(g.kind==='seizure') issues.push('verify_onset_offset');
+    if(g.kind==='seizure' && g.belowThreshold) issues.push('low_confidence_seizure_candidate');
     if(g.kind==='BIRD') issues.push('verify_BIRD_criteria');
     if(g.seizureOverlapCount>0) issues.push('review_seizure_overlap');
     if(g.overlappingSeizureCount>0) issues.push('review_overlapping_seizure_candidates');
