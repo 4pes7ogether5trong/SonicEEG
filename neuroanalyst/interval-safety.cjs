@@ -5,7 +5,15 @@ function groupWithIntervalSafety(events, options={}) {
   if (!Array.isArray(events)) throw new TypeError('events must be an array');
   const groups=groupEpisodesV2(events,options);
   const seizures=groups.filter(g=>g.kind==='seizure');
-  const overlaps=(a,b)=>a.start<=b.end && b.start<=a.end;
+  // Half-open spans [start,end); point annotations occupy an instant.
+  // A point at onset overlaps, but a point at offset does not.
+  const overlaps=(a,b)=>{
+    const ap=a.start===a.end,bp=b.start===b.end;
+    if(ap&&bp)return a.start===b.start;
+    if(ap)return b.start<=a.start&&a.start<b.end;
+    if(bp)return a.start<=b.start&&b.start<a.end;
+    return a.start<b.end&&b.start<a.end;
+  };
   for(const g of groups){
     if(g.kind==='seizure') {
       g.boundaryStatus='candidate_unverified';
