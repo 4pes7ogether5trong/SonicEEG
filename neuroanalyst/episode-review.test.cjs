@@ -1,0 +1,15 @@
+'use strict';const test=require('node:test'),assert=require('node:assert/strict');const {validateEpisode,prepareEpisodeReview}=require('./episode-review.cjs');
+const base=()=>({id:'e1',classification:'rhythmic',startSeconds:10,endSeconds:30,channels:['F3-C3'],features:{field:'left frontal',frequencyHz:2,morphology:'delta',evolution:'none',fluctuation:'present',plusModifiers:[]},evidenceIds:['trace-1'],qualityIntervals:[{startSeconds:10,endSeconds:30,quality:'usable'}],baseline:{sameStateReferenceId:'baseline-1',priorEventComparisonIds:[]},ageContext:'non-neonatal',reviewStatus:'reviewer-confirmed'});
+test('valid episode can be eligible',()=>assert.equal(prepareEpisodeReview([base()])[0].exportEligible,true));
+test('no clinical promotion of candidates',()=>{const e=base();e.reviewStatus='candidate';assert.equal(prepareEpisodeReview([e])[0].exportEligible,false)});
+test('artifact interval requires review',()=>{const e=base();e.qualityIntervals=[{startSeconds:12,endSeconds:14,quality:'artifact'}];assert.equal(prepareEpisodeReview([e])[0].exportEligible,false)});
+test('uncertain interval requires review',()=>{const e=base();e.qualityIntervals=[{startSeconds:12,endSeconds:14,quality:'uncertain'}];assert.equal(prepareEpisodeReview([e])[0].requiresReview,true)});
+test('neonatal IIC cannot use non-neonatal rule',()=>{const e=base();e.classification='iic';e.ageContext='neonatal';assert.ok(validateEpisode(e).includes('iic_age_scope_unverified'))});
+test('unknown age IIC cannot use non-neonatal rule',()=>{const e=base();e.classification='iic';e.ageContext='unknown';assert.ok(validateEpisode(e).includes('iic_age_scope_unverified'))});
+test('seizure boundary uncertainty mandatory',()=>{const e=base();e.classification='seizure';assert.ok(validateEpisode(e).includes('offset_uncertainty_missing'))});
+test('seizure range allowed',()=>{const e=base();e.classification='seizure';e.boundary={offsetType:'range'};assert.deepEqual(validateEpisode(e),[])});
+test('missing same-state baseline rejected',()=>{const e=base();delete e.baseline;assert.ok(validateEpisode(e).includes('baseline_context_missing'))});
+test('missing feature rejected',()=>{const e=base();delete e.features.evolution;assert.ok(validateEpisode(e).includes('features_incomplete'))});
+test('quality outside episode rejected',()=>{const e=base();e.qualityIntervals=[{startSeconds:5,endSeconds:20,quality:'usable'}];assert.ok(validateEpisode(e).includes('quality_interval_invalid'))});
+test('duplicate IDs rejected',()=>{const out=prepareEpisodeReview([base(),base()]);assert.ok(out[1].reasons.includes('duplicate_id'))});
+test('invalid zero-duration rejected',()=>{const e=base();e.endSeconds=10;assert.ok(validateEpisode(e).includes('interval_invalid'))});
