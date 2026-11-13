@@ -1,0 +1,16 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {auditReferenceCohort,referenceOnly}=require('./real-record-cohort-gate.cjs');
+let n=0;const test=(label,fn)=>{fn();n++;console.log('PASS',label)};
+const audit=auditReferenceCohort(referenceOnly);
+test('published PN13 three records one subject',()=>{assert.equal(audit.recordings,3);assert.equal(audit.independentSubjects,1);assert.equal(audit.referenceEvents,3)});
+test('cannot claim waveform benchmark from annotations',()=>assert.equal(audit.eligibleForWaveformBenchmark,false));
+test('missing waveforms flagged',()=>assert(audit.reasons.includes('waveform_unavailable')));
+test('missing predictions flagged',()=>assert(audit.reasons.includes('predictions_unavailable')));
+test('unverified legal use flagged',()=>assert(audit.reasons.includes('license_unverified')));
+test('PN13 published onset/offset verified',()=>assert.deepEqual(referenceOnly.map(x=>x.events[0]),[{onset:7062,offset:7110},{onset:7249,offset:7314},{onset:7553,offset:7704}]));
+test('split leakage rejected',()=>{const x=structuredClone(referenceOnly);x[1].split='train';assert(auditReferenceCohort(x).reasons.includes('subject_split_leakage'))});
+test('duplicate recording rejected',()=>{const x=structuredClone(referenceOnly);x.push(structuredClone(x[0]));assert(auditReferenceCohort(x).reasons.includes('duplicate_recording'))});
+test('invalid boundary rejected',()=>{const x=structuredClone(referenceOnly);x[0].events[0].offset=999999;assert(auditReferenceCohort(x).reasons.includes('invalid_reference_boundary'))});
+test('gated full metadata can pass only when all checks satisfied',()=>{const x=structuredClone(referenceOnly);for(const r of x){r.waveformAvailable=true;r.predictionsAvailable=true;r.licenseVerified=true;}assert.equal(auditReferenceCohort(x).eligibleForWaveformBenchmark,true)});
+console.log(`${n} tests passed`);
