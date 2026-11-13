@@ -4,16 +4,18 @@ const {gateSparseEpisode}=require('./sparse-evidence-gate.cjs');
 const finite=x=>typeof x==='number'&&Number.isFinite(x);
 function validateContext(e,m){
  const reasons=[];if(!m||!Array.isArray(m.baselines))return ['baseline_manifest_missing'];
- const refs=new Map();
- for(const b of m.baselines){if(!b||typeof b.id!=='string'||!b.id||refs.has(b.id)){reasons.push('baseline_ids_invalid');continue;}refs.set(b.id,b);}
- const b=refs.get(e?.baseline?.sameStateReferenceId);
+ const refs=new Map(),ambiguous=new Set();
+ for(const b of m.baselines){if(!b||typeof b.id!=='string'||!b.id||refs.has(b.id)){reasons.push('baseline_ids_invalid');if(b?.id)ambiguous.add(b.id);continue;}refs.set(b.id,b);}
+ const selected=e?.baseline?.sameStateReferenceId;
+ if(ambiguous.has(selected))reasons.push('baseline_ambiguous');
+ const b=refs.get(selected);
  if(!b)return [...new Set([...reasons,'baseline_unresolved'])];
  if(b.recordingId!==e.recordingId||b.montageId!==e.montageId)reasons.push('baseline_scope_mismatch');
  if(!finite(b.startSeconds)||!finite(b.endSeconds)||b.startSeconds<0||b.endSeconds<=b.startSeconds||b.endSeconds>e.startSeconds)reasons.push('baseline_time_invalid');
  if(!b.state||!e.state||b.state!==e.state)reasons.push('baseline_state_mismatch');
  if(!Array.isArray(b.channels)||!Array.isArray(e.channels)||e.channels.some(c=>!b.channels.includes(c)))reasons.push('baseline_channels_mismatch');
  if(!Array.isArray(e?.baseline?.priorEventComparisonIds))reasons.push('prior_events_invalid');
- else for(const id of e.baseline.priorEventComparisonIds){const p=(m.priorEvents||[]).find(x=>x?.id===id);if(!p||p.recordingId!==e.recordingId||!finite(p.endSeconds)||p.endSeconds>e.startSeconds)reasons.push('prior_event_unresolved_or_future');}
+ else for(const id of e.baseline.priorEventComparisonIds){const matches=(Array.isArray(m.priorEvents)?m.priorEvents:[]).filter(x=>x?.id===id);const p=matches[0];if(matches.length!==1||!p||p.recordingId!==e.recordingId||p.montageId!==e.montageId||!finite(p.startSeconds)||!finite(p.endSeconds)||p.startSeconds<0||p.endSeconds<=p.startSeconds||p.endSeconds>e.startSeconds)reasons.push('prior_event_unresolved_or_future');}
  return [...new Set(reasons)];
 }
 function buildSyntheticReport(episodes,manifest,{enabled=false}={}){
