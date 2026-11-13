@@ -1,0 +1,14 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {test}=require('node:test');
+const {compareAcquisitions,compareEvaluationContexts}=require('./acquisition-comparability.cjs');
+const acq=()=>({recordingId:'synthetic-001',sampleRateHz:256,highPassHz:0.5,lowPassHz:70,notchHz:60,clockOriginSeconds:0,units:'uV',referenceMode:'common-average'});
+const context=()=>({acquisition:acq(),reviewedIntervals:[[0,600],[600,1200]]});
+test('identical acquisitions pass',()=>assert.equal(compareAcquisitions(acq(),acq()).comparable,true));
+for(const [key,value] of [['recordingId','synthetic-002'],['sampleRateHz',512],['highPassHz',1],['lowPassHz',40],['notchHz',50],['clockOriginSeconds',1],['units','mV'],['referenceMode','linked-ears']])test('rejects '+key+' mismatch',()=>{const b=acq();b[key]=value;assert.equal(compareAcquisitions(acq(),b).comparable,false)});
+test('missing metadata fails closed',()=>assert.equal(compareAcquisitions(acq(),null).comparable,false));
+test('invalid filter band fails closed',()=>{const a=acq();a.highPassHz=100;assert.equal(compareAcquisitions(a,acq()).comparable,false)});
+test('identical normalized masks pass',()=>assert.equal(compareEvaluationContexts(context(),context()).comparable,true));
+test('different epoch masks fail despite equal duration',()=>{const b=context();b.reviewedIntervals=[[100,1300]];assert.ok(compareEvaluationContexts(context(),b).reasons.includes('reviewed_mask_mismatch'))});
+test('malformed mask fails closed',()=>{const b=context();b.reviewedIntervals=[[3,2]];assert.ok(compareEvaluationContexts(context(),b).reasons.includes('invalid_reviewed_intervals'))});
+test('touching intervals normalize',()=>{const b=context();b.reviewedIntervals=[[0,1200]];assert.equal(compareEvaluationContexts(context(),b).comparable,true)});
