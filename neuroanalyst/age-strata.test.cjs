@@ -1,0 +1,11 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),{classifyAge}=require('./age-strata.cjs');
+const rec='2026-11-13';
+for(const [birth,group] of [['2026-11-12','<1'],['2025-11-13','1-2'],['2024-11-13','1-2'],['2023-11-13','3-6'],['2020-11-13','3-6'],['2019-11-13','7-13'],['2013-11-13','7-13'],['2012-11-13','14-18'],['2008-11-13','14-18'],['2007-11-13','19-30'],['1996-11-13','19-30'],['1995-11-13','31-60'],['1966-11-13','31-60'],['1965-11-13','61+']])test('boundary '+group+' '+birth,()=>assert.equal(classifyAge({birthDate:birth,recordDate:rec,neonatalStatus:'no'}).group,group));
+test('neonatal precedence',()=>assert.equal(classifyAge({birthDate:'2026-11-12',recordDate:rec,neonatalStatus:'yes',postmenstrualAgeWeeks:38}).group,'neonatal'));
+test('infant uncertain neonatal status abstains',()=>assert.equal(classifyAge({birthDate:'2026-11-12',recordDate:rec}).group,'unknown'));
+test('missing age unknown',()=>assert.equal(classifyAge({recordDate:rec}).group,'unknown'));
+test('invalid future birth rejected',()=>assert.throws(()=>classifyAge({birthDate:'2027-01-01',recordDate:rec,neonatalStatus:'no'})));
+test('invalid calendar date rejected',()=>assert.throws(()=>classifyAge({birthDate:'2025-02-30',recordDate:rec,neonatalStatus:'no'})));
+test('invalid neonatal age rejected',()=>assert.throws(()=>classifyAge({neonatalStatus:'yes',postmenstrualAgeWeeks:100})));
+test('day before birthday stays younger',()=>assert.equal(classifyAge({birthDate:'2007-11-14',recordDate:rec,neonatalStatus:'no'}).group,'14-18'));
