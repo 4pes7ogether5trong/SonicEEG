@@ -1,0 +1,15 @@
+'use strict';const assert=require('node:assert/strict');const {test}=require('node:test');const {measure,comparable}=require('./reviewed-prevalence.cjs');
+const base={populationId:'reviewer-confirmed-GPD',reviewed:[[0,60],[120,180]],patterns:[[10,30],[20,50],[50,130],[140,150]]};
+test('overlap union and unreviewed gaps excluded',()=>{const x=measure(base);assert.equal(x.usableReviewedSeconds,120);assert.equal(x.occupiedSeconds,70);assert.equal(x.occupancyPercent,70/120*100);assert.equal(x.acnsPrevalence,'abundant');});
+test('short review not expanded to 20 minutes',()=>assert.equal(measure({populationId:'p',reviewed:[[0,40]],patterns:[[0,20]]}).usableReviewedSeconds,40));
+test('unquantified does not invent prevalence',()=>assert.equal(measure({...base,mode:'unquantified_example'}).occupancyPercent,null));
+test('estimate does not invent prevalence',()=>assert.equal(measure({...base,mode:'observed_estimate'}).acnsPrevalence,null));
+test('neonatal protocol guarded',()=>assert.throws(()=>measure({...base,neonatal:true}),/neonatal/));
+test('zero denominator guarded',()=>assert.throws(()=>measure({...base,reviewed:[]}),/no usable/));
+test('invalid intervals guarded',()=>assert.throws(()=>measure({...base,patterns:[[4,2]]}),/invalid/));
+test('empty pattern means zero occupancy',()=>assert.equal(measure({...base,patterns:[]}).acnsPrevalence,'absent'));
+const meta={montage:'longitudinal bipolar',derivations:['Fp1-F7'],electrodes:['Fp1','F7'],samplingHz:256,highpassHz:1,lowpassHz:70,notchHz:60,reference:'linked ears',reviewed:[[0,60],[120,180]]};
+test('same total reviewed duration with different masks rejected',()=>assert.match(comparable(meta,{...meta,reviewed:[[0,120]]}).reason,/masks/));
+test('different montage rejected',()=>assert.match(comparable(meta,{...meta,montage:'average'}).reason,/montage/));
+test('identical metadata and masks accepted',()=>assert.equal(comparable(meta,{...meta}).comparable,true));
+test('category thresholds',()=>{for(const [p,c] of [[0.5,'rare'],[1,'occasional'],[10,'frequent'],[50,'abundant'],[90,'continuous']])assert.equal(measure({populationId:'p',reviewed:[[0,100]],patterns:[[0,p]]}).acnsPrevalence,c)});
