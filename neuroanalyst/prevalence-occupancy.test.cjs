@@ -1,0 +1,17 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const {measurePattern,comparableMasks}=require('./prevalence-occupancy.cjs');
+const I=(s,e)=>({startSeconds:s,endSeconds:e});
+const run=(runs,reviewed=[I(0,100)],usable=reviewed,extra={})=>measurePattern({reviewedEpochs:reviewed,usableEpochs:usable,patternRuns:runs,...extra});
+test('overlapping runs are unioned',()=>assert.equal(run([I(0,20),I(10,30)]).occupancyPercent,30));
+test('review gaps excluded from numerator and denominator',()=>{const x=run([I(0,100)],[I(0,20),I(80,100)]);assert.equal(x.denominatorSeconds,40);assert.equal(x.numeratorSeconds,40)});
+test('unusable interval excluded',()=>assert.equal(run([I(0,100)],[I(0,100)],[I(0,20),I(80,100)]).occupancyPercent,100));
+test('zero occupancy absent',()=>assert.equal(run([]).category,'absent'));
+for(const [percent,category] of [[0.5,'rare'],[1,'occasional'],[10,'frequent'],[50,'abundant'],[90,'continuous']])test('category boundary '+percent,()=>assert.equal(run([I(0,percent)]).category,category));
+test('observed estimate cannot assign category',()=>assert.equal(run([I(0,90)],undefined,undefined,{measurement:'observed-estimate'}).category,null));
+test('unquantified example cannot assign occupancy',()=>assert.equal(run([I(0,90)],undefined,undefined,{measurement:'unquantified'}).occupancyPercent,null));
+test('neonatal category blocked',()=>assert.equal(run([I(0,90)],undefined,undefined,{ageContext:'neonatal'}).category,null));
+test('empty reviewed mask rejected',()=>assert.throws(()=>run([],[]),/no_usable_reviewed_eeg/));
+test('invalid intervals rejected',()=>assert.throws(()=>run([I(5,3)]),/invalid_interval/));
+test('equal durations not equivalent masks',()=>assert.equal(comparableMasks([I(0,10)],[I(10,20)]),false));
+test('split equivalent masks accepted',()=>assert.equal(comparableMasks([I(0,5),I(5,10)],[I(0,10)]),true));
