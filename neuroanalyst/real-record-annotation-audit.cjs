@@ -5,9 +5,9 @@
 // Recheck upstream version/checksums before a formal evaluation.
 const assert=require('node:assert/strict');
 const runs=[
- {run:'01',source:'PN13-1.edf',duration:undefined,tsv:'7062.000\t48.000\tseizure\t1\tseizure 1'},
+ {run:'01',source:'PN13-1.edf',duration:9355,tsv:'7062.000\t48.000\tseizure\t1\tseizure 1'},
  {run:'02',source:'PN13-2.edf',duration:9312,tsv:'7249.000\t65.000\tseizure\t2\tseizure 2'},
- {run:'03',source:'PN13-3.edf',duration:undefined,tsv:'7553.000\t151.000\tseizure\t3\tseizure 3'}
+ {run:'03',source:'PN13-3.edf',duration:12527,tsv:'7553.000\t151.000\tseizure\t3\tseizure 3'}
 ];
 function parse(run){const cols=run.tsv.split('\t');const onset=Number(cols[0]),duration=Number(cols[1]);assert(Number.isFinite(onset)&&onset>=0);assert(Number.isFinite(duration)&&duration>0);if(run.duration!==undefined)assert(onset+duration<=run.duration);return {recording:run.source,run:run.run,onset,offset:onset+duration,duration,label:cols[4],source:'published NEMAR annotation',detectorPrediction:false};}
 const events=runs.map(parse);
