@@ -1,0 +1,18 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {guardedOccupancyEvaluation}=require('./evaluation-guard.cjs');
+const {evaluateOffsets,SIENA_PN13_2_EVENT_A_REVIEW}=require('./seizure-offset-evaluation.cjs');
+const cohort={reviewedIntervals:[[0,1200]],ageGroup:'31-60',montage:{derivations:['Fp1-F7'],electrodes:['Fp1','F7'],reference:'bipolar'}};
+const pop={kind:'rhythmic-periodic',id:'p1',localization:'left',state:'awake',coverage:'complete',usableSeconds:1200,percent:20,category:'occasional'};
+test('matching masks and populations score',()=>assert.equal(guardedOccupancyEvaluation(pop,pop,cohort,cohort).comparable,true));
+test('shifted mask blocks score',()=>assert.ok(guardedOccupancyEvaluation(pop,pop,cohort,{...cohort,reviewedIntervals:[[1,1201]]}).reasons.includes('reviewed_epoch_mask_mismatch')));
+test('false denominator blocked',()=>assert.ok(guardedOccupancyEvaluation({...pop,usableSeconds:900},{...pop,usableSeconds:900},cohort,cohort).reasons.includes('occupancy_denominator_mask_mismatch')));
+test('age mismatch blocked',()=>assert.ok(guardedOccupancyEvaluation(pop,pop,cohort,{...cohort,ageGroup:'61+'}).reasons.includes('age_group_mismatch')));
+test('montage mismatch blocked',()=>assert.ok(guardedOccupancyEvaluation(pop,pop,cohort,{...cohort,montage:{...cohort.montage,derivations:['F7-Fp1']}}).reasons.includes('montage_mismatch')));
+test('unquantified not scored',()=>assert.equal(guardedOccupancyEvaluation({...pop,coverage:'unquantified'},pop,cohort,cohort).comparable,false));
+test('inclusive three-second and signed error',()=>{const r=evaluateOffsets([{id:'a',matched:true,predictedOffsetSeconds:103,reference:{type:'reviewer-point',elapsedSeconds:100}},{id:'b',matched:true,predictedOffsetSeconds:97,reference:{type:'published-point',elapsedSeconds:100}}]);assert.equal(r.agreementCount,2);assert.equal(r.agreementDenominator,2);assert.deepEqual(r.results.map(x=>x.signedDifferenceSeconds),[3,-3]);});
+test('outside tolerance fails',()=>assert.equal(evaluateOffsets([{id:'a',matched:true,predictedOffsetSeconds:103.01,reference:{type:'reviewer-point',elapsedSeconds:100}}]).agreementCount,0));
+test('missed separate',()=>{const r=evaluateOffsets([{id:'miss',matched:false},{id:'hit',matched:true,predictedOffsetSeconds:12,reference:{type:'published-point',elapsedSeconds:12}}]);assert.equal(r.missedSeizures,1);assert.equal(r.agreementDenominator,1);});
+test('range and indeterminate unscored',()=>{const r=evaluateOffsets([{id:'range',matched:true,predictedOffsetSeconds:15,reference:{type:'plausible-range',start:12,end:18}},{id:'unknown',matched:true,reference:{type:'indeterminate'}}]);assert.equal(r.agreementDenominator,0);assert.equal(r.unscoredEvents,2);});
+test('Siena reviewer point held out',()=>{assert.equal(SIENA_PN13_2_EVENT_A_REVIEW.reference.elapsedSeconds,7316);assert.equal(SIENA_PN13_2_EVENT_A_REVIEW.reference.type,'reviewer-point');assert.equal(SIENA_PN13_2_EVENT_A_REVIEW.heldOut,true);});
+test('duplicate event IDs rejected',()=>assert.throws(()=>evaluateOffsets([{id:'x',matched:false},{id:'x',matched:false}])));
