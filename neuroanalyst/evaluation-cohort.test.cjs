@@ -1,0 +1,15 @@
+'use strict';
+const assert=require('node:assert/strict');const {test}=require('node:test');const x=require('./evaluation-cohort.cjs');
+const m={derivations:['Fp1-F7','F7-T3'],electrodes:['Fp1','F7','T3'],reference:'bipolar'};
+const make=(reviewedIntervals=[[0,1200]],montage=m,ageGroup='31-60')=>({reviewedIntervals,montage,ageGroup});
+test('nine groups',()=>assert.equal(x.GROUPS.length,9));
+test('year boundaries',()=>{for(const [n,g] of [[0,'under-1'],[1,'1-2'],[2,'1-2'],[3,'3-6'],[6,'3-6'],[7,'7-13'],[13,'7-13'],[14,'14-18'],[18,'14-18'],[19,'19-30'],[30,'19-30'],[31,'31-60'],[60,'31-60'],[61,'61+']])assert.equal(x.groupFromYears(n),g)});
+test('neonatal precedence',()=>assert.equal(x.groupFromYears(0,true),'neonatal'));
+test('unknown age',()=>assert.equal(x.groupFromYears(null),'unknown'));
+test('equal masks match',()=>assert.equal(x.compareCohorts(make(),make()).comparable,true));
+test('shifted equal-duration masks rejected',()=>assert.ok(x.compareCohorts(make(),make([[30,1230]])).reasons.includes('reviewed_epoch_mask_mismatch')));
+test('union overlapping review spans',()=>assert.equal(x.seconds(x.normalize([[0,700],[500,1200]])),1200));
+test('gapped review not 20 minutes',()=>assert.ok(x.compareCohorts(make([[0,600],[700,1200]]),make([[0,600],[700,1200]])).reasons.includes('not_standard_20_minute_window')));
+test('montage mismatch',()=>assert.ok(x.compareCohorts(make(),make([[0,1200]],{...m,derivations:[...m.derivations].reverse()})).reasons.includes('montage_mismatch')));
+test('age mismatch',()=>assert.ok(x.compareCohorts(make(),make([[0,1200]],m,'19-30')).reasons.includes('age_group_mismatch')));
+test('invalid intervals',()=>assert.deepEqual(x.compareCohorts(make([[0,0]]),make()).reasons,['invalid_reviewed_intervals']));
