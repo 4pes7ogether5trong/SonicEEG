@@ -85,3 +85,11 @@ Do not request user review until a reproducible passing integration suite and a 
 - **Verification:** separate local sample-timebase prototype passed 15/15 Node tests; exact committed source/tests have not been executed. No assertion of CI pass, waveform identity, actual clock synchronization or clinical validity. The committed guard is not yet integrated into evaluation callers.
 - **P0 next:** run exact committed suite in CI or reproducible local clone, fix any failures, then integrate guard with acquisition, cohort, prevalence and seizure-offset comparators. Validate sample-to-elapsed mapping against EDF discontinuities and annotation clocks before using real recordings.
 - **P1:** age-conditioned EEG reference cases and technician-facing report integration remain pending. No patient data or production modifications.
+
+
+## 2026-11-13 — Waveform benchmark manifest gate
+- Commits: e09ae3cfe30e6cc5fe9b0ee926a5e8bd7e51dd0d (admission gate), 862cd5fa43c013adf29252361d63a3da6cd26a63 (14 regression scenarios).
+- Supersedes the weak boolean-only readiness check for *future* waveform benchmarking: requires SHA-256 waveform and prediction digests, verified-local waveform flag, license review metadata, acquisition channels/sample rate, reviewed epoch mask, annotation provenance, and blinded-before-unblinding prediction declaration; blocks same-patient train/test leakage and empty cohorts.
+- These are **asserted manifest fields, not cryptographic verification**; independent file hashing and audit are still required. The synthetic `valid()` fixture is not an admitted real EEG recording.
+- GitHub writes succeeded. **Exact committed-file Node execution not performed** because GitHub DNS prevents checkout; no waveform bytes acquired, no detector run, no accuracy result.
+- NEXT: verify exact committed tests; build a local EDF acquisition/hash verifier and metadata parser, ingest independently licensed waveform bytes, then produce blinded detector outputs for new patient-held-out records. Keep PN13 reviewer observations development-only.
