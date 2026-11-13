@@ -78,3 +78,10 @@ Do not request user review until a reproducible passing integration suite and a 
 - Comparison fails closed on missing/invalid acquisition metadata, different recording IDs, sample rates, filter bands/notch settings, units, reference mode, clock origin, or unequal normalized reviewed-epoch masks. Adjacent reviewed intervals normalize into one continuous interval. No waveform data or patient data used.
 - Important limitation: requiring identical metadata is deliberately stricter than physical signal comparability; clock origin alone does not prove clock synchronization, sample alignment, or identical resampling. Filter values are metadata, not verified filter impulse responses. This module is additive and **not yet wired** into guarded prevalence or offset evaluation callers.
 - Next P0: exact-commit CI; integrate acquisition guard into evaluation pipeline; add sample-index/timebase and clock-drift verification; prevent leakage from held-out Siena reviewer point; reconcile ACNS 2021 terminology and v0.8.1 report schema.
+
+
+## 2026-11-12 sample-clock metadata milestone
+- Commits `40cdd52` and `f186878`: additive `sample-timebase-guard.cjs` and 14 authored synthetic regression cases; checks recording ID, sample rate, first sample index, sample count, clock origin and reviewed-window bounds. Rejects end-exclusive sample indices and unsafe integer overflow.
+- **Verification:** separate local sample-timebase prototype passed 15/15 Node tests; exact committed source/tests have not been executed. No assertion of CI pass, waveform identity, actual clock synchronization or clinical validity. The committed guard is not yet integrated into evaluation callers.
+- **P0 next:** run exact committed suite in CI or reproducible local clone, fix any failures, then integrate guard with acquisition, cohort, prevalence and seizure-offset comparators. Validate sample-to-elapsed mapping against EDF discontinuities and annotation clocks before using real recordings.
+- **P1:** age-conditioned EEG reference cases and technician-facing report integration remain pending. No patient data or production modifications.
