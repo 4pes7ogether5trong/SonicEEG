@@ -1,0 +1,16 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const {normalize,intersect,occupancy}=require('./reviewed-prevalence.cjs');
+const base={reviewed:[[0,600],[900,1500]],usable:[[0,1500]],patternId:'LPD-A',patterns:[]};
+test('unions overlapping same-pattern runs and excludes unreviewed gap',()=>{const x=occupancy({...base,patterns:[{patternId:'LPD-A',start:500,end:1000},{patternId:'LPD-A',start:550,end:950}]});assert.equal(x.occupiedSeconds,200);assert.equal(x.usableReviewedSeconds,1200);assert.equal(x.occupancyPercent,100/6);assert.deepEqual(x.intervals,[[500,600],[900,1000]]);});
+test('different pattern IDs do not contribute',()=>{const x=occupancy({...base,patterns:[{patternId:'LPD-B',start:0,end:1500}]});assert.equal(x.occupiedSeconds,0);});
+test('usable mask excludes artifacts and denominator is not 20 minutes by fiat',()=>{const x=occupancy({...base,reviewed:[[0,600]],usable:[[0,100],[200,400]],patterns:[{patternId:'LPD-A',start:50,end:300}]});assert.equal(x.usableReviewedSeconds,300);assert.equal(x.occupiedSeconds,150);assert.equal(x.occupancyPercent,50);});
+test('double-counting repeated intervals impossible',()=>{const x=occupancy({...base,patterns:[{patternId:'LPD-A',start:0,end:100},{patternId:'LPD-A',start:0,end:100}]});assert.equal(x.occupiedSeconds,100);});
+test('touching intervals union',()=>assert.deepEqual(normalize([[0,1],[1,2]]),[[0,2]]));
+test('intersection handles equal endpoints',()=>assert.deepEqual(intersect([[0,2]],[[2,4]]),[]));
+test('rejects invalid or nonfinite intervals',()=>assert.throws(()=>occupancy({...base,patterns:[{patternId:'LPD-A',start:0,end:Infinity}]}),RangeError));
+test('rejects zero usable review',()=>assert.throws(()=>occupancy({...base,usable:[[601,899]]}),RangeError));
+test('unquantified examples cannot imply occupancy',()=>{const x=occupancy({...base,measurement:'unquantified_example',patterns:[{patternId:'LPD-A',start:0,end:5}]});assert.equal(x.occupancyPercent,null);assert.equal(x.occupiedSeconds,null);});
+test('observed estimates are distinguished from complete measurements',()=>{const x=occupancy({...base,measurement:'observed_estimate'});assert.equal(x.completeMeasurement,false);assert.equal(x.acnsPrevalenceCategory,null);});
+test('neonatal context never auto-assigns adult ACNS category',()=>{const x=occupancy({...base,ageGroup:'neonatal',clinicalConfirmation:true});assert.equal(x.acnsPrevalenceCategory,null);});
+test('rejects invalid measurement mode',()=>assert.throws(()=>occupancy({...base,measurement:'guess'}),RangeError));
