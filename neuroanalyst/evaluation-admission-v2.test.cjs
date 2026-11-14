@@ -1,0 +1,17 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const {mask,seconds,intersect,compare}=require('./evaluation-admission-v2.cjs');
+const acq={sampleHz:256,highPassHz:0.5,lowPassHz:70,notchHz:60,reference:'common',electrodes:['Fp1','F3'],derivations:[['Fp1','F3']]};
+const c=m=>({acquisition:acq,reviewedMask:m});
+test('union overlapping and touching',()=>assert.deepEqual(mask([[10,20],[0,5],[5,12]]),[[0,20]]));
+test('gaps excluded from denominator',()=>assert.equal(seconds([[0,10],[20,30]]),20));
+test('common mask excludes gaps',()=>assert.deepEqual(intersect([[0,10],[20,30]],[[5,25]]),[[5,10],[20,25]]));
+test('short identical prevalence masks admissible but nonstandard',()=>{const r=compare(c([[0,100]]),c([[0,100]]),{prevalence:true});assert.equal(r.admissible,true);assert.equal(r.standardWindowEligible,false)});
+test('exact 20 minutes qualifies',()=>assert.equal(compare(c([[0,1200]]),c([[0,1200]]),{prevalence:true}).standardWindowEligible,true));
+test('equal duration shifted prevalence masks rejected',()=>assert.equal(compare(c([[0,1200]]),c([[10,1210]]),{prevalence:true}).admissible,false));
+test('no common reviewed epochs rejected',()=>assert.equal(compare(c([[0,100]]),c([[200,300]])).admissible,false));
+test('sampling mismatch rejected',()=>assert.equal(compare(c([[0,1200]]),{acquisition:{...acq,sampleHz:128},reviewedMask:[[0,1200]]}).admissible,false));
+test('common reviewed mask returned',()=>assert.deepEqual(compare(c([[0,10],[20,30]]),c([[5,25]])).commonReviewedMask,[[5,10],[20,25]]));
+test('two 20 minute masks with 10 minute intersection not standard',()=>{const r=compare(c([[0,1200]]),c([[600,1800]]));assert.equal(r.admissible,true);assert.equal(r.standardWindowEligible,false);assert.equal(r.commonReviewedSeconds,600)});
+test('malformed intervals rejected',()=>{assert.throws(()=>mask([[0,NaN]]));assert.throws(()=>mask([[-1,4]]))});
+test('invalid derivations rejected',()=>assert.equal(compare(c([[0,1200]]),{acquisition:{...acq,derivations:[['Fp1','C3']]},reviewedMask:[[0,1200]]}).admissible,false));
