@@ -1,0 +1,13 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const {GROUPS,classifyAge}=require('./age-strata.cjs');
+test('nine strata exactly',()=>assert.equal(GROUPS.length,9));
+test('all older-year boundaries',()=>{for(const [y,g] of [[1,'1-2'],[2,'1-2'],[3,'3-6'],[6,'3-6'],[7,'7-13'],[13,'7-13'],[14,'14-18'],[18,'14-18'],[19,'19-30'],[30,'19-30'],[31,'31-60'],[60,'31-60'],[61,'61+']])assert.equal(classifyAge({completedYears:y}).group,g);});
+test('infant before first birthday',()=>assert.equal(classifyAge({ageDays:364}).group,'<1'));
+test('neonatal takes precedence',()=>assert.equal(classifyAge({ageDays:10,neonatal:true}).group,'neonatal'));
+test('neonatal maturity uncertainty retained',()=>assert.match(classifyAge({neonatal:true}).uncertainty,/unknown/));
+test('neonatal PMA preserved',()=>assert.equal(classifyAge({neonatal:true,postmenstrualWeeks:35}).postmenstrualWeeks,35));
+test('unknown stays unknown',()=>assert.equal(classifyAge({}).group,'unknown'));
+test('conflicting inputs fail closed',()=>assert.throws(()=>classifyAge({completedYears:3,ageDays:20}),RangeError));
+test('invalid ages rejected',()=>assert.throws(()=>classifyAge({completedYears:-1}),RangeError));
+test('never infer adult terminology from age',()=>assert.equal(classifyAge({completedYears:70}).adultAcnsAutomatic,false));
