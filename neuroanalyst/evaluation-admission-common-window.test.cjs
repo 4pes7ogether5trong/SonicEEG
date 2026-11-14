@@ -1,0 +1,17 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const {compare,intersect}=require('./evaluation-admission.cjs');
+const acq={sampleHz:256,highPassHz:0.5,lowPassHz:70,notchHz:60,reference:'common',electrodes:['F3','C3'],derivations:[['F3','C3']]};
+const pair=(a,b,options)=>compare({acquisition:acq,reviewedMask:a},{acquisition:acq,reviewedMask:b},options);
+test('short identical reviews admissible but not 20-minute standard',()=>{const r=pair([[0,600]],[[0,600]]);assert.equal(r.admissible,true);assert.equal(r.standardWindowEligible,false);assert.equal(r.commonReviewedSeconds,600)});
+test('twenty minutes common review qualifies',()=>{const r=pair([[0,1200]],[[0,1200]]);assert.equal(r.admissible,true);assert.equal(r.standardWindowEligible,true)});
+test('disjoint long reviews cannot qualify',()=>{const r=pair([[0,1200]],[[1200,2400]]);assert.equal(r.admissible,false);assert.equal(r.commonReviewedSeconds,0)});
+test('long shifted reviews only share ten minutes',()=>{const r=pair([[0,1200]],[[600,1800]]);assert.equal(r.admissible,true);assert.equal(r.standardWindowEligible,false);assert.equal(r.commonReviewedSeconds,600)});
+test('prevalence requires same epoch mask',()=>{const r=pair([[0,600]],[[600,1200]],{prevalence:true});assert.equal(r.admissible,false);assert.match(r.reasons.join(','),/epoch masks/)});
+test('prevalence short equal mask remains admissible',()=>{const r=pair([[0,600]],[[0,600]],{prevalence:true});assert.equal(r.admissible,true);assert.equal(r.standardWindowEligible,false)});
+test('overlap union is not double-counted',()=>{const r=pair([[0,500],[400,1000]],[[0,1000]]);assert.equal(r.commonReviewedSeconds,1000)});
+test('multiple common reviewed epochs add correctly',()=>{const r=pair([[0,800],[900,1400]],[[100,700],[900,1500]]);assert.equal(r.commonReviewedSeconds,1100)});
+test('acquisition mismatch blocks comparison',()=>{const b={...acq,sampleHz:512};const r=compare({acquisition:acq,reviewedMask:[[0,1200]]},{acquisition:b,reviewedMask:[[0,1200]]});assert.equal(r.admissible,false)});
+test('invalid mask blocks comparison',()=>{const r=pair([[0,0]],[[0,1200]]);assert.equal(r.admissible,false)});
+test('intersection preserves distinct intervals',()=>assert.deepEqual(intersect([[0,10],[20,30]],[[5,25]]),[[5,10],[20,25]]));
+test('1200 common seconds despite unequal masks qualifies standard waveform comparison',()=>{const r=pair([[0,1500]],[[200,1400]]);assert.equal(r.standardWindowEligible,true);assert.equal(r.commonReviewedSeconds,1200)});
