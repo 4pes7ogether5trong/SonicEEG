@@ -1,0 +1,14 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const {assemblePopulation}=require('./report-evidence-gate.cjs');
+const base={populationId:'p1',patternId:'rda1',kind:'rhythmic_periodic',localization:'left temporal',state:'awake',representativeTrace:{recordingId:'deidentified-fixture',elapsedSeconds:10},reviewed:[[0,30],[40,60]],usable:[[0,60]],runs:[{patternId:'rda1',start:10,end:20,evidenceId:'e1'},{patternId:'rda1',start:15,end:45,evidenceId:'e2'}],measurement:'complete',ageGroup:'31-60'};
+test('union runs, exclude unreviewed gap',()=>{const r=assemblePopulation(base);assert.equal(r.occupancy.usableReviewedSeconds,50);assert.equal(r.occupancy.occupiedSeconds,25);assert.equal(r.occupancy.percent,50);assert.equal(r.runEvidence.length,2)});
+test('unquantified has no occupancy',()=>assert.equal(assemblePopulation({...base,measurement:'unquantified_example'}).occupancy.percent,null));
+test('reject unconfirmed ACNS grade',()=>assert.throws(()=>assemblePopulation({...base,acnsCategory:'frequent'}),/reviewer/));
+test('reject neonatal ACNS grade',()=>assert.throws(()=>assemblePopulation({...base,ageGroup:'neonatal',reviewerConfirmed:true,acnsCategory:'frequent'}),/neonatal/));
+test('retain reviewer grade',()=>assert.equal(assemblePopulation({...base,reviewerConfirmed:true,acnsCategory:'frequent'}).reviewRequired,false));
+test('sporadic counts do not imply rate',()=>assert.equal(assemblePopulation({...base,kind:'sporadic_epileptiform'}).occupancy,null));
+test('trace mandatory',()=>assert.throws(()=>assemblePopulation({...base,representativeTrace:null}),/trace/));
+test('state mandatory',()=>assert.throws(()=>assemblePopulation({...base,state:''}),/state/));
+test('invalid run rejected',()=>assert.throws(()=>assemblePopulation({...base,runs:[{patternId:'rda1',start:9,end:8}]}),/invalid/));
+test('no ACNS grade for other',()=>assert.throws(()=>assemblePopulation({...base,kind:'other',reviewerConfirmed:true,acnsCategory:'frequent'}),/only/));
