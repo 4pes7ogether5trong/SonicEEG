@@ -1,0 +1,14 @@
+'use strict';const test=require('node:test'),assert=require('node:assert/strict');const {mask,seconds,compare}=require('./evaluation-admission.cjs');
+const acq={sampleHz:256,highPassHz:0.5,lowPassHz:70,notchHz:60,reference:'common average',electrodes:['Fp1','F3','C3'],derivations:[['Fp1','F3'],['F3','C3']]};const make=(reviewedMask=[[0,1200]],acquisition=acq)=>({reviewedMask,acquisition});
+test('union overlapping masks',()=>assert.deepEqual(mask([[10,30],[0,20],[30,40]]),[[0,40]]));
+test('reject missing mask',()=>assert.throws(()=>seconds([])));
+test('reject reversed interval',()=>assert.throws(()=>seconds([[3,2]])));
+test('exact 20 minutes passes',()=>assert.equal(compare(make(),make(),{prevalence:true}).admissible,true));
+test('1199 seconds fails',()=>assert.equal(compare(make([[0,1199]]),make()).admissible,false));
+test('equal duration different masks fail prevalence',()=>assert.match(compare(make(),make([[100,1300]]),{prevalence:true}).reasons.join(' '),/masks differ/));
+test('waveform gate does not demand identical reviewed mask',()=>assert.equal(compare(make(),make([[100,1300]])).admissible,true));
+test('reversed derivation fails',()=>assert.equal(compare(make(),make(undefined,{...acq,derivations:[['F3','Fp1'],['F3','C3']]})).admissible,false));
+test('reference mismatch fails',()=>assert.equal(compare(make(),make(undefined,{...acq,reference:'linked ears'})).admissible,false));
+test('missing notch metadata fails',()=>{const {notchHz,...rest}=acq;assert.equal(compare(make(),make(undefined,rest)).admissible,false)});
+test('electrode coverage mismatch fails',()=>assert.equal(compare(make(),make(undefined,{...acq,electrodes:['Fp1','F3','C3','O1']})).admissible,false));
+test('explicit absent notch supported',()=>assert.equal(compare(make(undefined,{...acq,notchHz:null}),make(undefined,{...acq,notchHz:null})).admissible,true));
