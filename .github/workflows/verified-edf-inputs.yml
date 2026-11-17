@@ -1,0 +1,46 @@
+name: Verify native EEG inputs
+on:
+  push:
+    branches: ['neuroanalyst/verified-edf-inputs']
+    paths:
+      - 'neuroanalyst/verified_edf_inputs.py'
+      - 'neuroanalyst/test_verified_edf_inputs.py'
+      - '.github/workflows/verified-edf-inputs.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out this public research commit
+        run: |
+          git init -q
+          git fetch --quiet --depth=1 "https://github.com/$GITHUB_REPOSITORY.git" "$GITHUB_SHA"
+          git checkout --quiet --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Test recovery and integrity
+        run: python3 -m unittest discover -v -s neuroanalyst -p 'test_verified_edf_inputs.py'
+      - name: Acquire two published unmodified EDFs
+        run: |
+          cat <<'TSV' > "$RUNNER_TEMP/sources.tsv"
+          publisher_edf_sha256	publisher_edf_bytes	publisher_edf_url
+          4c4a95a9b4331aeaadadd538763eb2e735950d9aa615b85ee6246c784be8ae90	42399744	https://s3.amazonaws.com/physionet-open/chbmit/1.0.0/chb01/chb01_03.edf
+          ef6e037b5ac7edd46379d944bbba350abdff70de50467696fc2b8e5cc5dcb0b7	91664896	https://s3.amazonaws.com/physionet-open/siena-scalp-eeg/1.0.0/PN12/PN12-3.edf
+          TSV
+          python3 neuroanalyst/verified_edf_inputs.py "$RUNNER_TEMP/sources.tsv" "$RUNNER_TEMP/edf"
+      - name: Read a calibrated waveform from each source
+        run: |
+          node <<'NODE'
+          const {readWindow} = require('./neuroanalyst/edf-window-safe.cjs');
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = path.join(process.env.RUNNER_TEMP, 'edf');
+          const edfs = fs.readdirSync(root).filter(file => file.endsWith('.edf'));
+          if (edfs.length !== 2) throw Error('Missing verified EDF');
+          for (const file of edfs) {
+            const r = readWindow(path.join(root, file), {channel: 0, startSeconds: 15, durationSeconds: 5});
+            if (!r.values.every(Number.isFinite) || new Set(r.values).size < 2) throw Error('No varying calibrated EEG');
+            console.log(JSON.stringify({sha256: file.slice(0,-4), label:r.label, unit:r.unit, hz:r.sampleHz, samples:r.sampleCount}));
+          }
+          NODE
